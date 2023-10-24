@@ -5,7 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+		"start": "index.js"
   },
   "keywords": [],
   "author": "",
@@ -28,7 +29,4 @@
     "websocket-stream": "^5.5.2",
     "ws": "^8.14.2"
   },
-	"scripts": {
-		"start": "index.js"
-	},
 }
