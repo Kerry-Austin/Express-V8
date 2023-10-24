@@ -31,6 +31,7 @@ const voiceOptions = {
 	sentencesPerCall: 3,
 	KbPerChunk: 8
 }
+const apiOptions = voiceOptions.apiOptions
 
 
 
@@ -153,7 +154,7 @@ io.on('connection', async (socket) => {
 			audioTextStream.push(null);
 
 			if (conversationOptions.sendAudioBack) {
-				const audioStream = await PlayHT.stream(audioTextStream, voiceOptions.apiOptions);
+				const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
 
 				let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
 				const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
@@ -249,7 +250,7 @@ io.on('connection', async (socket) => {
 			audioTextStream.push(group);
 			audioTextStream.push(null);
 
-			const audioStream = await PlayHT.stream(audioTextStream, voiceOptions.apiOptions);
+			const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
 
 			let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
 			const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
