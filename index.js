@@ -24,7 +24,11 @@ PlayHT.init({
 });
 
 const voiceOptions = {
-	sentenceCount: 3,
+	apiOptions: {
+		 quality: 'premium',
+	},
+	sentencesPerCall: 3,
+	KbPerChunk: 8
 }
 
 
@@ -129,7 +133,7 @@ io.on('connection', async (socket) => {
 		const { location, sentMessage, conversationOptions } = data.payload;
 
 		let sentenceBuffer = '';
-		const maxSentenceCount = 5
+		const maxSentenceCount = voiceOptions.sentencesPerCall
 
 		// 2. Queue and Flags
 		let pendingGroups = [];
@@ -148,10 +152,10 @@ io.on('connection', async (socket) => {
 			audioTextStream.push(null);
 
 			if (conversationOptions.sendAudioBack) {
-				const audioStream = await PlayHT.stream(audioTextStream, { quality: 'premium' });
+				const audioStream = await PlayHT.stream(audioTextStream, voiceOptions.apiOptions);
 
 				let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
-				const targetSize = 0 //256 * 1024;  // KB in bytes
+				const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
 
 				audioStream.on('data', (audioChunk) => {
 					audioBuffer = Buffer.concat([audioBuffer, audioChunk]);  // Append the new chunk to the buffer
@@ -226,7 +230,7 @@ io.on('connection', async (socket) => {
 
 
 		let sentenceBuffer = '';
-		const maxSentenceCount = 2
+		const maxSentenceCount = voiceOptions.sentencesPerCall
 
 		// 2. Queue and Flags
 		let pendingGroups = [];
@@ -244,10 +248,10 @@ io.on('connection', async (socket) => {
 			audioTextStream.push(group);
 			audioTextStream.push(null);
 
-			const audioStream = await PlayHT.stream(audioTextStream, { quality: 'premium' });
+			const audioStream = await PlayHT.stream(audioTextStream, voiceOptions.apiOptions);
 
 			let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
-			const targetSize = 0 //256 * 1024;  // KB in bytes
+			const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
 
 			audioStream.on('data', (audioChunk) => {
 				audioBuffer = Buffer.concat([audioBuffer, audioChunk]);  // Append the new chunk to the buffer
