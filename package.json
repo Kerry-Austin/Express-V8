@@ -27,5 +27,8 @@
     "socket.io": "^4.7.2",
     "websocket-stream": "^5.5.2",
     "ws": "^8.14.2"
-  }
+  },
+	"scripts": {
+		"start": "index.js"
+	},
 }
