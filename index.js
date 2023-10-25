@@ -19,14 +19,14 @@ const tokenizer = new natural.default.SentenceTokenizer();
 PlayHT.init({
 	apiKey: '2111d113542d43298034d49903ed9334',
 	userId: 'hfF1DKXkMNXhQfOx24NnrLq178C2',
-	defaultVoiceId: 's3://voice-cloning-zero-shot/7c339a9d-370f-4643-adf5-4134e3ec9886/mlae02/manifest.json',
+	defaultVoiceId: 's3://voice-cloning-zero-shot/028a32d4-6a79-4ca3-a303-d6559843114b/chris/manifest.json',
 	defaultVoiceEngine: 'PlayHT2.0',
 });
 
 const voiceOptions = {
 	apiOptions: {
 		 quality: 'premium',
-		temperature: 0,
+		temperature: 0.1,
 	},
 	sentencesPerCall: 3,
 	KbPerChunk: 8
