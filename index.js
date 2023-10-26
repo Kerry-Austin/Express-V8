@@ -26,10 +26,10 @@ PlayHT.init({
 const voiceOptions = {
 	apiOptions: {
 		 quality: 'premium',
-		temperature: 0.1,
+		//temperature: 0.1,
 	},
 	sentencesPerCall: 3,
-	KbPerChunk: 8
+	KbPerChunk: 4
 }
 const apiOptions = voiceOptions.apiOptions
 
