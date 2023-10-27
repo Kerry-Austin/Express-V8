@@ -28,8 +28,8 @@ const voiceOptions = {
 		 quality: 'premium',
 		//temperature: 0.1,
 	},
-	sentencesPerCall: 3,
-	KbPerChunk: 4
+	sentencesPerCall: 2,
+	KbPerChunk: 1
 }
 const apiOptions = voiceOptions.apiOptions
 
