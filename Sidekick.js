@@ -468,10 +468,6 @@ export class Sidekick {
 	async streamResponse(sentMessage, conversationOptions) {
 		console.log("=> streamResponse()...");
 		console.log("Given:", {sentMessage}, {conversationOptions})
-		if(!sentMessage.content){
-			console.error("NO MESSAGE CONTENT")
-			return
-		}
 		sentMessage = {
 			...sentMessage,
 			tokenCount: openaiTokenCounter.text(sentMessage.content, "gpt-3.5-turbo")

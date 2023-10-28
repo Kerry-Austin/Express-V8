@@ -153,7 +153,7 @@ io.on('connection', async (socket) => {
 			audioTextStream.push(group);
 			audioTextStream.push(null);
 
-			if (conversationOptions.sendAudioBack) {
+			if (conversationOptions.conversationMode) {
 				const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
 
 				let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
