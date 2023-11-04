@@ -127,6 +127,7 @@ io.on('connection', async (socket) => {
 
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
+		const audioId = Date.now().toString()
 
 		// ---> handleAudioGroup does nothing until convoOptions impletmented
 
@@ -164,7 +165,8 @@ io.on('connection', async (socket) => {
 
 					// Check if the buffer size has reached the target size (8KB)
 					if (audioBuffer.length >= targetSize) {
-						socket.emit("audioChunk", audioBuffer);  // Send buffered audio
+						
+						socket.emit("audioChunk", {audioId, audioBuffer});  // Send buffered audio
 						console.log(`GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
 						audioBuffer = Buffer.alloc(0);  // Reset the buffer
 					}
@@ -175,7 +177,7 @@ io.on('connection', async (socket) => {
 					okayToSend = true;
 
 					if (audioBuffer.length > 0) {
-						socket.emit("audioChunk", audioBuffer);  // Send any remaining audio
+						socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
 						console.log(`GROUP #${currentGroup} (Final): Sent remaining ${audioBuffer.length} bytes!`);
 					}
 					if (pendingGroups.length) {
@@ -229,6 +231,7 @@ io.on('connection', async (socket) => {
 	socket.on(`playMessage`, async (data) => {
 		console.log('PLAY MESSAGE');
 		const sentMessageContent = data.payload
+		const audioId = Date.now().toString()
 
 
 		let sentenceBuffer = '';
@@ -260,7 +263,7 @@ io.on('connection', async (socket) => {
 
 				// Check if the buffer size has reached the target size (8KB)
 				if (audioBuffer.length >= targetSize) {
-					socket.emit("audioChunk", audioBuffer);  // Send buffered audio
+					socket.emit("audioChunk", {audioId, audioBuffer});  // Send buffered audio
 					console.log(`GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
 					audioBuffer = Buffer.alloc(0);  // Reset the buffer
 				}
@@ -271,7 +274,7 @@ io.on('connection', async (socket) => {
 				okayToSend = true;
 
 				if (audioBuffer.length > 0) {
-					socket.emit("audioChunk", audioBuffer);  // Send any remaining audio
+					socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
 					console.log(`GROUP #${currentGroup} (Final): Sent remaining ${audioBuffer.length} bytes!`);
 				}
 				if (pendingGroups.length) {
