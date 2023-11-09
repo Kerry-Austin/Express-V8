@@ -335,22 +335,23 @@ io.on('connection', async (socket) => {
 
 // POSTS
 app.post('/streamAudio', async (req, res) => {
-	console.log("=> /streamAudio")
+	console.log("/streamAudio")
 	const { messageText } = req.body
 	//console.log("currentTextStream"); console.log(currentTextStream)
 	try {
+		console.log("/streamAudio -> PlayHT.stream(messageText)...")
 		const audioStream = await PlayHT.stream(messageText);
 		res.setHeader('Content-Type', 'audio/mpeg');
 		audioStream.pipe(res);
 
 		// Logging for debugging
-		audioStream.on('end', () => console.log('Stream ended'));
-		audioStream.on('error', (error) => console.log(`Stream error: ${error}`))
-	} catch (error) { console.error("/streamAudio failed", error) }
+		audioStream.on('end', () => console.log('/streamAudio -> Stream ended'));
+		audioStream.on('error', (error) => console.log(`/streamAudio -> Stream error: ${error}`))
+	} catch (error) { console.error("/streamAudio -> failed", error) }
 })
 
 app.post('/streamItBack', async (req, res) => {
-	console.log("=> /streamItBack");
+	console.log("/streamItBack");
 
 	// Initialize headers
 	res.setHeader('Transfer-Encoding', 'chunked');
@@ -365,28 +366,30 @@ app.post('/streamItBack', async (req, res) => {
 
 	// Event Listener for Incoming Text
 	req.on('data', chunk => {
-		console.log("chunk to audio:", chunk)
+		console.log("/streamItBack -> chunk:", chunk)
 		textStream.push(chunk.toString()); // Add text chunk to Readable stream
 	});
 
 	// Initialize PlayHT stream
-	console.log("textStream:", textStream)
+	console.log("/streamItBack -> textStream:", textStream)
 	const audioStream = await PlayHT.stream(textStream, {
 		quality: 'premium',
 	});
 
 	// Pipe audio stream to the client
+	console.log("/streamItBack -> audioStream.pipe(res)...")
 	audioStream.pipe(res);
 
 	// Logging for Debugging
-	audioStream.on('end', () => console.log('Audio stream ended'));
-	audioStream.on('error', error => console.log(`Stream error: ${error}`));
+	audioStream.on('end', () => console.log('/streamItBack -> Audio stream ended'));
+	audioStream.on('error', error => console.log(`/streamItBack -> Stream error: ${error}`));
 
 })
 
 app.post('/playAudio', async (req, res) => {
-	console.log("=> /playAudio")
+	console.log("/playAudio")
 	const { messageText } = req.body;
+	console.log("/playAudio -> PlayHT.stream(messageText)...")
 	const audioStream = await PlayHT.stream(messageText)
 
 	const range = req.headers.range;
@@ -407,117 +410,157 @@ app.post('/playAudio', async (req, res) => {
 	});
 
 	audioStream.on('end', () => {
-		console.log("Stream ended")
+		console.log("/playAudio -> Stream ended")
 		res.end();
 	});
 });
 
 app.post('/createDocument', async (req, res) => {
+	console.log("/createDocument")
 	const { location } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/createDocument -> sidekick.createDocument()...")
 	const result = await sidekickInstance.createDocument();
+	console.log("/createDocument -> END")
 	res.json(result);
 });
 
 app.post('/talkToAPI', async (req, res) => {
+	console.log("/talkToAPI")
 	const { location, sentMessage, conversationOptionsAPI } = req.body;
 	let conversationOptions = conversationOptionsAPI
-	console.log("/talkToAPI =>")
-	console.log("location:", location)
-	console.log("message:", sentMessage)
-	console.log("conversationOptions:", conversationOptions)
+	console.log("/talkToAPI -> location:", location)
+	console.log("/talkToAPI -> message:", sentMessage)
+	console.log("/talkToAPI -> conversationOptions:", conversationOptions)
 	const sidekickInstance = new Sidekick(location);
+	console.log("/talkToAPI -> sidekick.talkToAPI()...")
 	const result = await sidekickInstance.talkToAPI(sentMessage, conversationOptions);
+	console.log("/talkToAPI -> END")
 	res.json(result);
 });
 
 app.post(`/startConvoHere`, async (req, res) => {
+	console.log("/startConvoHere")
 	const { location, creationTimeId } = req.body
 	const sidekickInstance = new Sidekick(location)
+	console.log("/startConvoHere -> sidekick.startConvoHere()...")
 	const result = await sidekickInstance.startConvoHere(creationTimeId)
+	console.log("/startConvoHere -> END")
 	res.json(result)
 })
 
 app.post('/createConversation', async (req, res) => {
+	console.log("/createConversation");
 	const { location } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/createConversation -> sidekick.createConversation()...");
 	const result = await sidekickInstance.createConversation();
+	console.log("/createConversation -> END");
 	res.json(result);
 });
 
 app.post('/deleteConversation', async (req, res) => {
+	console.log("/deleteConversation");
 	const { location } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/deleteConversation -> sidekick.deleteConversation()...");
 	const result = await sidekickInstance.deleteConversation();
+	console.log("/deleteConversation -> END");
 	res.json(result);
 });
 
 app.post('/saveMessage', async (req, res) => {
+	console.log("/saveMessage");
 	const { location, role, content } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/saveMessage -> sidekick.saveMessage()...");
 	const result = await sidekickInstance.saveMessage(role, content);
+	console.log("/saveMessage -> END");
 	res.json(result);
 });
 
 app.post('/sendMessage', async (req, res) => {
+	console.log("/sendMessage");
 	const { location, sentMessage, conversationOptions } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/sendMessage -> sidekick.sendMessage()...");
 	const result = await sidekickInstance.sendMessage(sentMessage, conversationOptions);
+	console.log("/sendMessage -> END");
 	res.json(result);
 });
 
+
 app.post('/streamResponse', async (req, res) => {
+	console.log("/streamResponse");
 	const { location, sentMessage, conversationOptions } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/streamResponse -> sidekick.streamResponse()...");
 	const stream = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
 	// Pipe the stream to the response to send it to the client
 	res.setHeader('Content-Type', 'text/plain; charset=utf-8');
 	res.setHeader('Transfer-Encoding', 'chunked');
 	streamToResponse(stream, res);
+	console.log("/streamResponse -> END");
 });
 
 app.post('/updateConversation', async (req, res) => {
+	console.log("/updateConversation");
 	const { location, updateData } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/updateConversation -> sidekick.updateConversation()...");
 	const result = await sidekickInstance.updateConversation(updateData);
+	console.log("/updateConversation -> END");
 	res.json(result);
 });
 
 app.post('/updateSettings', async (req, res) => {
+	console.log("/updateSettings");
 	const { location, updateData } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/updateSettings -> sidekick.updateSettings()...");
 	const result = await sidekickInstance.updateSettings(updateData);
+	console.log("/updateSettings -> END");
 	res.json(result);
 });
 
 app.post('/clearMessages', async (req, res) => {
+	console.log("/clearMessages");
 	const { location } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/clearMessages -> sidekick.clearMessages()...");
 	const result = await sidekickInstance.clearMessages();
+	console.log("/clearMessages -> END");
 	res.json(result);
 });
 
 app.post('/renameConversation', async (req, res) => {
+	console.log("/renameConversation");
 	const { location, newName } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/renameConversation -> sidekick.renameConversation()...");
 	const result = await sidekickInstance.renameConversation(newName);
+	console.log("/renameConversation -> END");
 	res.json(result);
 });
 
 app.post('/trimChatHistory', async (req, res) => {
-	const { location, chatHistory, conversationOptions } = req.body
+	console.log("/trimChatHistory");
+	const { location, chatHistory, conversationOptions } = req.body;
 	const sidekickInstance = new Sidekick(location);
+	console.log("/trimChatHistory -> sidekick.trimChatHistory()...");
 	const result = sidekickInstance.trimChatHistory(chatHistory, conversationOptions);
+	console.log("/trimChatHistory -> END");
 	res.json(result);
 });
 
 
 // GETS
-// SSE route
 app.get('/events', (req, res) => {
+	console.log("/events");
 	const location = JSON.parse(req.query.location);
 
 	const sidekickInstance = new Sidekick(location);
+	console.log("/events -> sidekick.sendMessageData()...");
 	const botResponse = sidekickInstance.sendMessageData();
 
 	// Set headers and send the bot response
@@ -530,37 +573,51 @@ app.get('/events', (req, res) => {
 	req.on('close', () => {
 		res.end();
 	});
+	console.log("/events -> END");
 });
 
 app.get('/getMessages', async (req, res) => {
+	console.log("/getMessages");
 	const location = JSON.parse(req.query.location);
 	const sidekickInstance = new Sidekick(location);
+	console.log("/getMessages -> sidekick.getMessages()...");
 	const result = await sidekickInstance.getMessages();
+	console.log("/getMessages -> END");
 	res.json(result);
 });
 
 app.get('/getConversations', async (req, res) => {
+	console.log("/getConversations");
 	const location = JSON.parse(req.query.location);
 	console.log("location:", location)
 	const sidekickInstance = new Sidekick(location);
+	console.log("/getConversations -> sidekick.getConversations()...");
 	const result = await sidekickInstance.getConversations();
+	console.log("/getConversations -> END");
 	res.json(result);
 });
 
 app.get('/getConversation', async (req, res) => {
+	console.log("/getConversation");
 	const location = JSON.parse(req.query.location);
 	const sidekickInstance = new Sidekick(location);
+	console.log("/getConversation -> sidekick.getConversation()...");
 	const result = await sidekickInstance.getConversation();
+	console.log("/getConversation -> END");
 	res.json(result);
 });
 
 app.get('/getLastConversation', async (req, res) => {
+	console.log("/getLastConversation");
 	const location = JSON.parse(req.query.location);
 	console.log("location:", location);
 	const sidekickInstance = new Sidekick(location);
+	console.log("/getLastConversation -> sidekick.getLastConversation()...");
 	const result = await sidekickInstance.getLastConversation();
+	console.log("/getLastConversation -> END");
 	res.json(result);
 });
+
 
 
 //take care of errors
