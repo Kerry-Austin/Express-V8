@@ -28,8 +28,8 @@ const voiceOptions = {
 		 quality: 'premium',
 		temperature: 0.1,
 	},
-	sentencesPerCall: 2,
-	KbPerChunk: 1
+	sentencesPerCall: 5,
+	KbPerChunk: 8
 }
 const apiOptions = voiceOptions.apiOptions
 
@@ -100,11 +100,64 @@ const createNewReadable = () => new Readable({ read() { } });
 
 
 io.on('connection', async (socket) => {
-	console.log('New socket connected!');
-	console.log("ALL SOCKETS:")
-	console.log(Object.keys(io.sockets.sockets));
+	console.log('io.on(connection) -> New socket connected!');
+	//console.log("io.on(connection) -> ALL SOCKETS:")
+	//console.log(Object.keys(io.sockets.sockets));
 
+	// Function to handle audio streaming for a group
+	async function handleAudioGroup(group, pendingGroups, okayToSend, groupNumber, audioId) {
+		groupNumber += 1;
+		const currentGroup = groupNumber;
 
+		okayToSend = false;
+		const audioTextStream = new Readable({ read() { } });
+		audioTextStream.push(group);
+		audioTextStream.push(null);
+
+		const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
+
+		let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
+		const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
+
+		audioStream.on('data', (audioChunk) => {
+			audioBuffer = Buffer.concat([audioBuffer, audioChunk]);  // Append the new chunk to the buffer
+
+			// Check if the buffer size has reached the target size (8KB)
+			if (audioBuffer.length >= targetSize) {
+				socket.emit("audioChunk", {audioId, audioBuffer});  // Send buffered audio
+				console.log(`audioStream.on(data) -> GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
+				audioBuffer = Buffer.alloc(0);  // Reset the buffer
+			}
+
+		});
+		audioStream.on('end', () => {
+			console.log('audioStream.on(end)');
+			okayToSend = true;
+			
+			console.log("audioStream.on(end) -> audioBuffer.length:", audioBuffer.length)
+			if (audioBuffer.length > 0) {
+				console.log("audioStream.on(end) -> if (audioBuffer.length > 0)...")
+				console.log("audioStream.on(end) -> socket.emit(audioChunk)")
+				socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
+				console.log(`audioStream.on(end) -> GROUP #${currentGroup} (Final): Sent remaining ${audioBuffer.length} bytes!`);
+				console.log("audioStream.on(end) -> socket.emit(audioCompleted)")
+				socket.emit("audioCompleted", {audioId})
+			}
+			console.log("audioStream.on(end) -> pendingGroups.length:", pendingGroups.length)
+			if (pendingGroups.length) {
+				console.log("audioStream.on(end) -> if(pendingGroups.length)...")
+				console.log("audioStream.on(end) -> handleAudioGroup(nextGroup)")
+				const nextGroup = pendingGroups.shift();
+				handleAudioGroup(nextGroup, pendingGroups, okayToSend, groupNumber, audioId);
+			}
+			else{
+				console.log("audioStream.on(end) -> if (!audioBuffer.length > 0 & !pendingGroups)...")
+				console.log("audioStream.on(end) -> socket.emit(audioCompleted)")
+				socket.emit("audioCompleted", {audioId})
+			}
+		});
+		audioStream.on('error', error => console.log(`Stream error: ${error}`));
+	}
 
 	socket.onAny((event, ...args) => {
 		//console.log(`***Server (${socket.id}) received event: ${event}***`);
@@ -143,51 +196,6 @@ io.on('connection', async (socket) => {
 		let okayToSend = true;
 		let groupNumber = 0;
 
-		// Function to handle audio streaming for a group
-		async function handleAudioGroup(group) {
-
-			groupNumber += 1;
-			const currentGroup = groupNumber;
-
-			okayToSend = false;
-			const audioTextStream = new Readable({ read() { } });
-			audioTextStream.push(group);
-			audioTextStream.push(null);
-
-			if (conversationOptions.sendAudioBack) {
-				const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
-
-				let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
-				const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
-
-				audioStream.on('data', (audioChunk) => {
-					audioBuffer = Buffer.concat([audioBuffer, audioChunk]);  // Append the new chunk to the buffer
-
-					// Check if the buffer size has reached the target size (8KB)
-					if (audioBuffer.length >= targetSize) {
-						
-						socket.emit("audioChunk", {audioId, audioBuffer});  // Send buffered audio
-						console.log(`GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
-						audioBuffer = Buffer.alloc(0);  // Reset the buffer
-					}
-
-				});
-				audioStream.on('end', () => {
-					console.log('Audio stream ended');
-					okayToSend = true;
-
-					if (audioBuffer.length > 0) {
-						socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
-						console.log(`GROUP #${currentGroup} (Final): Sent remaining ${audioBuffer.length} bytes!`);
-					}
-					if (pendingGroups.length) {
-						const nextGroup = pendingGroups.shift();
-						handleAudioGroup(nextGroup);
-					}
-				});
-				audioStream.on('error', error => console.log(`Stream error: ${error}`));
-			}
-		}
 
 		const sidekickInstance = new Sidekick(location);
 		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
@@ -204,7 +212,7 @@ io.on('connection', async (socket) => {
 				// 4. Audio Stream Handling
 				if (okayToSend) {
 					console.log({sentenceSubset})
-					await handleAudioGroup(sentenceSubset);
+					await handleAudioGroup(sentenceSubset, pendingGroups, okayToSend, groupNumber, audioId);
 				} else {
 					// 5. Queue Management
 					pendingGroups.push(sentenceSubset);
@@ -220,7 +228,7 @@ io.on('connection', async (socket) => {
 			// Handle any remaining sentences here
 			if (okayToSend) {
 				console.log({sentenceBuffer})
-				await handleAudioGroup(sentenceBuffer);
+				await handleAudioGroup(sentenceBuffer, pendingGroups, okayToSend, groupNumber, audioId);
 			} else {
 				pendingGroups.push(sentenceBuffer);
 			}
@@ -229,7 +237,7 @@ io.on('connection', async (socket) => {
 	});
 
 	socket.on(`playMessage`, async (data) => {
-		console.log('PLAY MESSAGE');
+		console.log('socket.on(playMessage)');
 		const sentMessageContent = data.payload
 		const audioId = Date.now().toString()
 
@@ -243,47 +251,7 @@ io.on('connection', async (socket) => {
 		let groupNumber = 0;
 
 		 
-		// Function to handle audio streaming for a group
-		async function handleAudioGroup(group) {
-			groupNumber += 1;
-			const currentGroup = groupNumber;
-
-			okayToSend = false;
-			const audioTextStream = new Readable({ read() { } });
-			audioTextStream.push(group);
-			audioTextStream.push(null);
-
-			const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
-
-			let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
-			const targetSize = voiceOptions.KbPerChunk * 1024;  // KB in bytes
-
-			audioStream.on('data', (audioChunk) => {
-				audioBuffer = Buffer.concat([audioBuffer, audioChunk]);  // Append the new chunk to the buffer
-
-				// Check if the buffer size has reached the target size (8KB)
-				if (audioBuffer.length >= targetSize) {
-					socket.emit("audioChunk", {audioId, audioBuffer});  // Send buffered audio
-					console.log(`GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
-					audioBuffer = Buffer.alloc(0);  // Reset the buffer
-				}
-
-			});
-			audioStream.on('end', () => {
-				console.log('Audio stream ended');
-				okayToSend = true;
-
-				if (audioBuffer.length > 0) {
-					socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
-					console.log(`GROUP #${currentGroup} (Final): Sent remaining ${audioBuffer.length} bytes!`);
-				}
-				if (pendingGroups.length) {
-					const nextGroup = pendingGroups.shift();
-					handleAudioGroup(nextGroup);
-				}
-			});
-			audioStream.on('error', error => console.log(`Stream error: ${error}`));
-		}
+		
 
 		const textToChunks = (text, chunkSize) => {
 			const chunks = [];
@@ -306,7 +274,7 @@ io.on('connection', async (socket) => {
 
 				// 4. Audio Stream Handling
 				if (okayToSend) {
-					await handleAudioGroup(sentenceSubset);
+					await handleAudioGroup(sentenceSubset, pendingGroups, okayToSend, groupNumber, audioId);
 				} else {
 					// 5. Queue Management
 					pendingGroups.push(sentenceSubset);
@@ -319,16 +287,15 @@ io.on('connection', async (socket) => {
 		if (sentenceBuffer) {
 			// Handle any remaining sentences here
 			if (okayToSend) {
-				await handleAudioGroup(sentenceBuffer);
+				await handleAudioGroup(sentenceBuffer, pendingGroups, okayToSend, groupNumber, audioId);
 			} else {
 				pendingGroups.push(sentenceBuffer);
 			}
 		}
-		console.log("***DONE DONE***")
 	})
 
 	socket.on('disconnect', () => {
-		console.log('---> Socket closed!');
+		console.log('socket.on(disconnnect) -> Socket closed!');
 	});
 });
 
