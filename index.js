@@ -173,11 +173,11 @@ io.on('connection', async (socket) => {
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
 		console.log('TEXT REQUEST');
+		socket.emit("updateMessage", {message: "Requesting text..."})
 
 		
 		const { location, sentMessage, conversationOptions } = data.payload;
 		
-		conversationOptions.sendAudioBack = true
 		const audioId = Date.now().toString()
 
 		let sentenceBuffer = '';
@@ -189,19 +189,19 @@ io.on('connection', async (socket) => {
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
 			const decodedTextChunk = textDecoder.decode(chunk);
-			console.log(`for.chunk(${decodedTextChunkchunk})...`)
+			console.log(`for.chunk (${decodedTextChunk})...`)
 			if (conversationOptions.sendAudioBack){
-				console.log(`for.chunk(${decodedTextChunk}) -> if (sendAudioBack)...`)
+				console.log(`for.chunk (${decodedTextChunk}) -> if (sendAudioBack)...`)
 				sentenceBuffer += decodedTextChunk;
 				const sentences = tokenizer.tokenize(sentenceBuffer);
 				while (sentences.length >= maxSentenceCount) {
-					console.log(`for.chunk(${decodedTextChunk}) -> while loop...`)
+					console.log(`for.chunk (${decodedTextChunk}) -> while loop...`)
 					const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
 	
 					// 4. Audio Stream Handling
-					console.log(`for.chunk(${decodedTextChunk}) -> ${audioState.okayToSend}`)
+					console.log(`for.chunk (${decodedTextChunk}) -> ${audioState.okayToSend}`)
 					if (audioState.okayToSend) {
-						console.log(`for.chunk(${decodedTextChunk}) -> if (audioState.okayToSend)...`)
+						console.log(`for.chunk (${decodedTextChunk}) -> if (audioState.okayToSend)...`)
 						console.log(`for.chunk(${decodedTextChunk}) ->  handleAudioGroup(${sentenceSubset})...`)
 						await handleAudioGroup(sentenceSubset, audioState, audioId);
 					} else {
@@ -229,6 +229,7 @@ io.on('connection', async (socket) => {
 
 	socket.on(`playMessage`, async (data) => {
 		console.log('socket.on(playMessage)');
+		socket.emit("updateMessage", {message: "Getting audio..."})
 		const sentMessageContent = data.payload
 		const audioId = Date.now().toString()
 
