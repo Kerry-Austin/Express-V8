@@ -203,23 +203,23 @@ io.on('connection', async (socket) => {
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
 			const decodedTextChunk = textDecoder.decode(chunk);
-			sentenceBuffer += decodedTextChunk;
-
-			const sentences = tokenizer.tokenize(sentenceBuffer);
-			while (sentences.length >= maxSentenceCount) {
-				const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
-
-				// 4. Audio Stream Handling
-				if (okayToSend) {
-					console.log({sentenceSubset})
-					await handleAudioGroup(sentenceSubset, pendingGroups, okayToSend, groupNumber, audioId);
-				} else {
-					// 5. Queue Management
-					pendingGroups.push(sentenceSubset);
+			if (conversationOptions.sendAudioBack){
+				sentenceBuffer += decodedTextChunk;
+				const sentences = tokenizer.tokenize(sentenceBuffer);
+				while (sentences.length >= maxSentenceCount) {
+					const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
+	
+					// 4. Audio Stream Handling
+					if (okayToSend) {
+						console.log({sentenceSubset})
+						await handleAudioGroup(sentenceSubset, pendingGroups, okayToSend, groupNumber, audioId);
+					} else {
+						// 5. Queue Management
+						pendingGroups.push(sentenceSubset);
+					}
+					sentenceBuffer = sentences.join(' ');
 				}
-				sentenceBuffer = sentences.join(' ');
 			}
-	 
 			console.log({decodedTextChunk})
 			socket.emit("textChunk", { decodedTextChunk });
 		}

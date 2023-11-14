@@ -530,7 +530,7 @@ async clearMessages() {
     const {
         systemMessage,
         staticMemory,
-        model = "gpt-3.5-turbo",
+        model = "undi95/toppy-m-7b",
         temperature,
         max_tokens,
         limitType,
@@ -633,7 +633,7 @@ async clearMessages() {
     const {
         systemMessage,
         staticMemory,
-        model = "openai/gpt-3.5-turbo", // default model
+        model = "undi95/toppy-m-7b", //"openai/gpt-3.5-turbo", // default model
         temperature,
         max_tokens
     } = conversationOptions;
