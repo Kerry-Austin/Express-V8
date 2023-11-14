@@ -18,6 +18,10 @@ import fetch from 'node-fetch';
 import { Readable } from 'stream';
 
 
+const backupApiKey = process.env['apikey']
+const openai_BACKUP = new OpenAI({
+				apiKey: backupApiKey,
+		});
 
 
 
@@ -530,7 +534,7 @@ async clearMessages() {
     const {
         systemMessage,
         staticMemory,
-        model = "undi95/toppy-m-7b",
+        model = "gpt-3.5-turbo",
         temperature,
         max_tokens,
         limitType,
@@ -560,17 +564,17 @@ async clearMessages() {
 
     trimmedChatHistory = trimmedChatHistory.map(message => ({ role: message.role, content: message.content }));
 
-    const openai_BACKUP = new OpenAI({
-        apiKey: "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",
-    });
+    
 
-    const openai = new OpenAI({
+    let openai = new OpenAI({
         apiKey: "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",
         baseURL: "https://openrouter.ai/api/v1",
         defaultHeaders: {
             "HTTP-Referer": "https://github.com/OpenRouterTeam/openrouter-examples",
         },
     });
+	openai = openai_BACKUP
+		
     const apiOptions = {
         messages: trimmedChatHistory.map(message => ({ role: message.role, content: message.content })),
         model,
@@ -633,18 +637,19 @@ async clearMessages() {
     const {
         systemMessage,
         staticMemory,
-        model = "undi95/toppy-m-7b", //"openai/gpt-3.5-turbo", // default model
+        model = "gpt-3.5-turbo", //"openai/gpt-3.5-turbo", // default model
         temperature,
         max_tokens
     } = conversationOptions;
 
-    const openai = new OpenAI({
+    let openai = new OpenAI({
         apiKey: "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",
         baseURL: "https://openrouter.ai/api/v1",
         defaultHeaders: {
             "HTTP-Referer": "https://github.com/OpenRouterTeam/openrouter-examples",
         },
     });
+		openai = openai_BACKUP
 
     // Construct the initial chatHistory array with the message.
     let chatHistory = [sentMessage];

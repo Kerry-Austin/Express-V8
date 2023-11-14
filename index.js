@@ -15,7 +15,6 @@ const tokenizer = new natural.default.SentenceTokenizer();
 
 
 
-
 PlayHT.init({
 	apiKey: '2111d113542d43298034d49903ed9334',
 	userId: 'hfF1DKXkMNXhQfOx24NnrLq178C2',
@@ -28,8 +27,8 @@ const voiceOptions = {
 		 quality: 'premium',
 		temperature: 0.1,
 	},
-	sentencesPerCall: 5,
-	KbPerChunk: 8
+	sentencesPerCall: 10,
+	KbPerChunk: 1
 }
 const apiOptions = voiceOptions.apiOptions
 
@@ -105,15 +104,19 @@ io.on('connection', async (socket) => {
 	//console.log(Object.keys(io.sockets.sockets));
 
 	// Function to handle audio streaming for a group
-	async function handleAudioGroup(group, pendingGroups, okayToSend, groupNumber, audioId) {
-		groupNumber += 1;
-		const currentGroup = groupNumber;
-
-		okayToSend = false;
+	let audioState = {
+			pendingGroups: [], // [x]
+			okayToSend: true, // [x]
+			groupNumber: 0 // [x]
+	};
+	
+	async function handleAudioGroup(group, audioState, audioId) {
+		audioState.groupNumber += 1;
+		const currentGroup = audioState.groupNumber;
+		audioState.okayToSend = false;
 		const audioTextStream = new Readable({ read() { } });
 		audioTextStream.push(group);
 		audioTextStream.push(null);
-
 		const audioStream = await PlayHT.stream(audioTextStream, apiOptions);
 
 		let audioBuffer = Buffer.alloc(0);  // Initialize empty buffer
@@ -124,35 +127,24 @@ io.on('connection', async (socket) => {
 
 			// Check if the buffer size has reached the target size (8KB)
 			if (audioBuffer.length >= targetSize) {
-				socket.emit("audioChunk", {audioId, audioBuffer});  // Send buffered audio
+				socket.emit("audioChunk", {audioId, audioBuffer, group});  // Send buffered audio
 				console.log(`audioStream.on(data) -> GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
 				audioBuffer = Buffer.alloc(0);  // Reset the buffer
 			}
 
 		});
 		audioStream.on('end', () => {
-			console.log('audioStream.on(end)');
-			okayToSend = true;
+			audioState.okayToSend = true;
 			
-			console.log("audioStream.on(end) -> audioBuffer.length:", audioBuffer.length)
 			if (audioBuffer.length > 0) {
-				console.log("audioStream.on(end) -> if (audioBuffer.length > 0)...")
-				console.log("audioStream.on(end) -> socket.emit(audioChunk)")
 				socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
-				console.log(`audioStream.on(end) -> GROUP #${currentGroup} (Final): Sent remaining ${audioBuffer.length} bytes!`);
-				console.log("audioStream.on(end) -> socket.emit(audioCompleted)")
 				socket.emit("audioCompleted", {audioId})
 			}
-			console.log("audioStream.on(end) -> pendingGroups.length:", pendingGroups.length)
-			if (pendingGroups.length) {
-				console.log("audioStream.on(end) -> if(pendingGroups.length)...")
-				console.log("audioStream.on(end) -> handleAudioGroup(nextGroup)")
-				const nextGroup = pendingGroups.shift();
-				handleAudioGroup(nextGroup, pendingGroups, okayToSend, groupNumber, audioId);
+			if (audioState.pendingGroups.length) {
+				const nextGroup = audioState.pendingGroups.shift();
+				handleAudioGroup(nextGroup, audioState, audioId);
 			}
 			else{
-				console.log("audioStream.on(end) -> if (!audioBuffer.length > 0 & !pendingGroups)...")
-				console.log("audioStream.on(end) -> socket.emit(audioCompleted)")
 				socket.emit("audioCompleted", {audioId})
 			}
 		});
@@ -180,22 +172,16 @@ io.on('connection', async (socket) => {
 
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
-		const audioId = Date.now().toString()
-
-		// ---> handleAudioGroup does nothing until convoOptions impletmented
-
-
 		console.log('TEXT REQUEST');
+
+		
 		const { location, sentMessage, conversationOptions } = data.payload;
+		
+		conversationOptions.sendAudioBack = true
+		const audioId = Date.now().toString()
 
 		let sentenceBuffer = '';
 		const maxSentenceCount = voiceOptions.sentencesPerCall
-
-		// 2. Queue and Flags
-		let pendingGroups = [];
-		let okayToSend = true;
-		let groupNumber = 0;
-
 
 		const sidekickInstance = new Sidekick(location);
 		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
@@ -203,34 +189,39 @@ io.on('connection', async (socket) => {
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
 			const decodedTextChunk = textDecoder.decode(chunk);
+			console.log(`for.chunk(${decodedTextChunkchunk})...`)
 			if (conversationOptions.sendAudioBack){
+				console.log(`for.chunk(${decodedTextChunk}) -> if (sendAudioBack)...`)
 				sentenceBuffer += decodedTextChunk;
 				const sentences = tokenizer.tokenize(sentenceBuffer);
 				while (sentences.length >= maxSentenceCount) {
+					console.log(`for.chunk(${decodedTextChunk}) -> while loop...`)
 					const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
 	
 					// 4. Audio Stream Handling
-					if (okayToSend) {
-						console.log({sentenceSubset})
-						await handleAudioGroup(sentenceSubset, pendingGroups, okayToSend, groupNumber, audioId);
+					console.log(`for.chunk(${decodedTextChunk}) -> ${audioState.okayToSend}`)
+					if (audioState.okayToSend) {
+						console.log(`for.chunk(${decodedTextChunk}) -> if (audioState.okayToSend)...`)
+						console.log(`for.chunk(${decodedTextChunk}) ->  handleAudioGroup(${sentenceSubset})...`)
+						await handleAudioGroup(sentenceSubset, audioState, audioId);
 					} else {
 						// 5. Queue Management
-						pendingGroups.push(sentenceSubset);
+						audioState.pendingGroups.push(sentenceSubset);
 					}
 					sentenceBuffer = sentences.join(' ');
 				}
 			}
-			console.log({decodedTextChunk})
+			//console.log({decodedTextChunk})
 			socket.emit("textChunk", { decodedTextChunk });
 		}
 
 		if (sentenceBuffer) {
 			// Handle any remaining sentences here
-			if (okayToSend) {
+			if (audioState.okayToSend) {
 				console.log({sentenceBuffer})
-				await handleAudioGroup(sentenceBuffer, pendingGroups, okayToSend, groupNumber, audioId);
+				await handleAudioGroup(sentenceBuffer, audioState, audioId);
 			} else {
-				pendingGroups.push(sentenceBuffer);
+				audioState.pendingGroups.push(sentenceBuffer);
 			}
 		}
 	
@@ -245,23 +236,33 @@ io.on('connection', async (socket) => {
 		let sentenceBuffer = '';
 		const maxSentenceCount = voiceOptions.sentencesPerCall
 
-		// 2. Queue and Flags
-		let pendingGroups = [];
-		let okayToSend = true;
-		let groupNumber = 0;
 
-		 
-		
-
-		const textToChunks = (text, chunkSize) => {
+		const textToChunksBySentences = (text, maxSentencesPerChunk) => {
+			// Tokenize the text into sentences
+			const sentences = tokenizer.tokenize(text);
 			const chunks = [];
-			for (let i = 0; i < text.length; i += chunkSize) {
-				chunks.push(text.slice(i, i + chunkSize));
+			let currentChunk = [];
+
+			// Iterate over the sentences
+			sentences.forEach(sentence => {
+					currentChunk.push(sentence);
+
+					// When the current chunk reaches the max sentence count, add it to chunks
+					if (currentChunk.length >= maxSentencesPerChunk) {
+							chunks.push(currentChunk.join(' '));
+							currentChunk = []; // Reset current chunk
+					}
+			});
+
+			// Add any remaining sentences as the last chunk
+			if (currentChunk.length > 0) {
+					chunks.push(currentChunk.join(' '));
 			}
+
 			return chunks;
 		};
 
-		const streamingText = textToChunks(sentMessageContent, 100)
+		const streamingText = textToChunksBySentences(sentMessageContent, maxSentenceCount);
 
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
@@ -272,24 +273,20 @@ io.on('connection', async (socket) => {
 			while (sentences.length >= maxSentenceCount) {
 				const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
 
-				// 4. Audio Stream Handling
-				if (okayToSend) {
-					await handleAudioGroup(sentenceSubset, pendingGroups, okayToSend, groupNumber, audioId);
+				if (audioState.okayToSend) {
+					await handleAudioGroup(sentenceSubset, audioState, audioId);
 				} else {
-					// 5. Queue Management
-					pendingGroups.push(sentenceSubset);
+					audioState.pendingGroups.push(sentenceSubset);
 				}
 				sentenceBuffer = sentences.join(' ');
 			}
-
 		}
-
 		if (sentenceBuffer) {
 			// Handle any remaining sentences here
-			if (okayToSend) {
-				await handleAudioGroup(sentenceBuffer, pendingGroups, okayToSend, groupNumber, audioId);
+			if (audioState.okayToSend) {
+				await handleAudioGroup(sentenceBuffer, audioState, audioId);
 			} else {
-				pendingGroups.push(sentenceBuffer);
+				audioState.pendingGroups.push(sentenceBuffer);
 			}
 		}
 	})
