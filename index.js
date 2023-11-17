@@ -24,11 +24,11 @@ PlayHT.init({
 
 const voiceOptions = {
 	apiOptions: {
-		 quality: 'premium',
+		 quality: 'draft',
 		temperature: 0.1,
 	},
-	sentencesPerCall: 10,
-	KbPerChunk: 1
+	sentencesPerCall: 1,
+	KbPerChunk: 64
 }
 const apiOptions = voiceOptions.apiOptions
 
@@ -111,6 +111,7 @@ io.on('connection', async (socket) => {
 	};
 	
 	async function handleAudioGroup(group, audioState, audioId) {
+		console.log("handleAudioGroup() -> group:", group)
 		audioState.groupNumber += 1;
 		const currentGroup = audioState.groupNumber;
 		audioState.okayToSend = false;
@@ -134,15 +135,17 @@ io.on('connection', async (socket) => {
 
 		});
 		audioStream.on('end', () => {
+			console.log("audioStream.on(end)")
 			audioState.okayToSend = true;
 			
 			if (audioBuffer.length > 0) {
-				socket.emit("audioChunk", {audioId, audioBuffer});  // Send any remaining audio
+				socket.emit("audioChunk", {audioId, audioBuffer, group});  // Send any remaining audio
 				socket.emit("audioCompleted", {audioId})
 			}
 			if (audioState.pendingGroups.length) {
 				const nextGroup = audioState.pendingGroups.shift();
 				handleAudioGroup(nextGroup, audioState, audioId);
+				console.log(`audioStream.on(end) -> FINAL GROUP: Sent ${audioBuffer.length} bytes!`);
 			}
 			else{
 				socket.emit("audioCompleted", {audioId})
@@ -177,6 +180,8 @@ io.on('connection', async (socket) => {
 
 		
 		const { location, sentMessage, conversationOptions } = data.payload;
+		conversationOptions.max_tokens = 5 // TESTING
+		conversationOptions.sendAudioBack = true // TESTING
 		
 		const audioId = Date.now().toString()
 
@@ -189,17 +194,19 @@ io.on('connection', async (socket) => {
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
 			const decodedTextChunk = textDecoder.decode(chunk);
-			console.log(`for.chunk (${decodedTextChunk})...`)
+			//console.log(`for.chunk (${decodedTextChunk})...`)
 			if (conversationOptions.sendAudioBack){
 				console.log(`for.chunk (${decodedTextChunk}) -> if (sendAudioBack)...`)
 				sentenceBuffer += decodedTextChunk;
 				const sentences = tokenizer.tokenize(sentenceBuffer);
+				console.log("seteneceBuffer:", sentenceBuffer)
+				console.log("sentences:", sentences)
 				while (sentences.length >= maxSentenceCount) {
 					console.log(`for.chunk (${decodedTextChunk}) -> while loop...`)
 					const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
+					console.log("sentenceSubset:", sentenceSubset)
 	
 					// 4. Audio Stream Handling
-					console.log(`for.chunk (${decodedTextChunk}) -> ${audioState.okayToSend}`)
 					if (audioState.okayToSend) {
 						console.log(`for.chunk (${decodedTextChunk}) -> if (audioState.okayToSend)...`)
 						console.log(`for.chunk(${decodedTextChunk}) ->  handleAudioGroup(${sentenceSubset})...`)

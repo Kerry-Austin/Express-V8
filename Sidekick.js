@@ -22,6 +22,15 @@ const backupApiKey = process.env['apikey']
 const openai_BACKUP = new OpenAI({
 				apiKey: backupApiKey,
 		});
+let openai = new OpenAI({
+        apiKey: "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",
+        baseURL: "https://openrouter.ai/api/v1",
+        defaultHeaders: {
+            "HTTP-Referer": "https://github.com/OpenRouterTeam/openrouter-examples",
+        },
+    });
+
+openai = openai_BACKUP
 
 
 
@@ -566,14 +575,7 @@ async clearMessages() {
 
     
 
-    let openai = new OpenAI({
-        apiKey: "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",
-        baseURL: "https://openrouter.ai/api/v1",
-        defaultHeaders: {
-            "HTTP-Referer": "https://github.com/OpenRouterTeam/openrouter-examples",
-        },
-    });
-	openai = openai_BACKUP
+    
 		
     const apiOptions = {
         messages: trimmedChatHistory.map(message => ({ role: message.role, content: message.content })),
@@ -642,14 +644,7 @@ async clearMessages() {
         max_tokens
     } = conversationOptions;
 
-    let openai = new OpenAI({
-        apiKey: "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",
-        baseURL: "https://openrouter.ai/api/v1",
-        defaultHeaders: {
-            "HTTP-Referer": "https://github.com/OpenRouterTeam/openrouter-examples",
-        },
-    });
-		openai = openai_BACKUP
+   
 
     // Construct the initial chatHistory array with the message.
     let chatHistory = [sentMessage];
