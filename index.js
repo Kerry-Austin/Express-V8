@@ -175,12 +175,11 @@ io.on('connection', async (socket) => {
 
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
-		console.log('TEXT REQUEST');
+		console.log('socket.on(textRequest');
 		socket.emit("updateMessage", {message: "Requesting text..."})
-
 		
 		const { location, sentMessage, conversationOptions } = data.payload;
-		conversationOptions.max_tokens = 5 // TESTING
+		//conversationOptions.max_tokens = 30 // TESTING
 		conversationOptions.sendAudioBack = true // TESTING
 		
 		const audioId = Date.now().toString()
@@ -193,44 +192,38 @@ io.on('connection', async (socket) => {
 
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
-			const decodedTextChunk = textDecoder.decode(chunk);
-			//console.log(`for.chunk (${decodedTextChunk})...`)
-			if (conversationOptions.sendAudioBack){
-				console.log(`for.chunk (${decodedTextChunk}) -> if (sendAudioBack)...`)
-				sentenceBuffer += decodedTextChunk;
-				const sentences = tokenizer.tokenize(sentenceBuffer);
-				console.log("seteneceBuffer:", sentenceBuffer)
-				console.log("sentences:", sentences)
-				while (sentences.length >= maxSentenceCount) {
-					console.log(`for.chunk (${decodedTextChunk}) -> while loop...`)
-					const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
-					console.log("sentenceSubset:", sentenceSubset)
-	
-					// 4. Audio Stream Handling
-					if (audioState.okayToSend) {
-						console.log(`for.chunk (${decodedTextChunk}) -> if (audioState.okayToSend)...`)
-						console.log(`for.chunk(${decodedTextChunk}) ->  handleAudioGroup(${sentenceSubset})...`)
-						await handleAudioGroup(sentenceSubset, audioState, audioId);
-					} else {
-						// 5. Queue Management
-						audioState.pendingGroups.push(sentenceSubset);
-					}
-					sentenceBuffer = sentences.join(' ');
-				}
-			}
-			//console.log({decodedTextChunk})
-			socket.emit("textChunk", { decodedTextChunk });
-		}
+			const decodedTextChunk = textDecoder.decode(chunk)
+			const textChunk = decodedTextChunk.toString();
+			socket.emit(`textChunk`, {textChunk})
+			
+			sentenceBuffer += textChunk;
+			const sentences = tokenizer.tokenize(sentenceBuffer);
+			
+			while (sentences.length > maxSentenceCount) {
+				const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
 
-		if (sentenceBuffer) {
+				
+				if (audioState.okayToSend && conversationOptions.sendAudioBack) {
+					await handleAudioGroup(sentenceSubset, audioState, audioId);
+				} 
+				else {
+					audioState.pendingGroups.push(sentenceSubset);
+				}
+				sentenceBuffer = sentences.join(' ');
+				
+				
+			}
+	 		
+		}
+		if (sentenceBuffer && conversationOptions.sendAudioBack) {
 			// Handle any remaining sentences here
 			if (audioState.okayToSend) {
-				console.log({sentenceBuffer})
 				await handleAudioGroup(sentenceBuffer, audioState, audioId);
 			} else {
 				audioState.pendingGroups.push(sentenceBuffer);
 			}
 		}
+		
 	
 	});
 
@@ -256,7 +249,7 @@ io.on('connection', async (socket) => {
 					currentChunk.push(sentence);
 
 					// When the current chunk reaches the max sentence count, add it to chunks
-					if (currentChunk.length >= maxSentencesPerChunk) {
+					if (currentChunk.length > maxSentencesPerChunk) {
 							chunks.push(currentChunk.join(' '));
 							currentChunk = []; // Reset current chunk
 					}

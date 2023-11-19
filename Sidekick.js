@@ -597,11 +597,11 @@ async clearMessages() {
             }
         },
         onToken: async token => {
-						console.log("stream.onToken -> token:")
-            console.log({ token });
+						//console.log("stream.onToken -> token:")
+            //console.log({ token });
         },
         onCompletion: async completion => {
-            console.log('stream.onCompletion() -> Completion completed:', completion);
+            //console.log('stream.onCompletion() -> Completion completed:', completion);
             const botResponse = {
                 role: "assistant",
                 content: completion,
@@ -613,7 +613,7 @@ async clearMessages() {
             await this.saveMessage(botResponse, conversationOptions);
         },
         onFinal: async completion => {
-            console.log("stream.onFinal() -> Stream completed:", completion);
+            //console.log("stream.onFinal() -> Stream completed:", completion);
         },
     });
     console.log("streamResponse() -> END");
