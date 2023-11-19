@@ -717,7 +717,7 @@ app.post('/trimChatHistory', async (req, res) => {
 
 
 // GETS
-/* Not used?
+
 app.get('/events', (req, res) => {
 	console.log("/events");
 	const location = JSON.parse(req.query.location);
@@ -738,7 +738,7 @@ app.get('/events', (req, res) => {
 	});
 	console.log("/events -> END");
 });
-*/
+
 
 /* Not used
 app.get('/getMessages', async (req, res) => {
