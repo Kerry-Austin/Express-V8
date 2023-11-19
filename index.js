@@ -180,7 +180,7 @@ io.on('connection', async (socket) => {
 		
 		const { location, sentMessage, conversationOptions } = data.payload;
 		//conversationOptions.max_tokens = 30 // TESTING
-		conversationOptions.sendAudioBack = true // TESTING
+		//conversationOptions.sendAudioBack = true // TESTING
 		
 		const audioId = Date.now().toString()
 
@@ -292,11 +292,185 @@ io.on('connection', async (socket) => {
 		}
 	})
 
+	socket.on('createDocument', async (data, callback) => {
+	console.log("/createDocument WebSocket event");
+	const { location } = data;
+	const sidekickInstance = new Sidekick(location);
+	console.log("/createDocument -> sidekick.createDocument()...");
+	try {
+		const result = await sidekickInstance.createDocument();
+		console.log("/createDocument -> END");
+		callback({ success: true, data: result });
+	} catch (error) {
+		console.error("Error in createDocument:", error);
+		callback({ success: false, error: error.message });
+	}
+
+
+
+
+
+	
+
 	socket.on('disconnect', () => {
 		console.log('socket.on(disconnnect) -> Socket closed!');
 	});
 });
 
+	socket.on('createConversation', async (data, callback) => {
+		console.log("/createConversation WebSocket event");
+		const { location } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/createConversation -> sidekick.createConversation()...");
+		try {
+			const result = await sidekickInstance.createConversation();
+			console.log("/createConversation -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in createConversation:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('deleteConversation', async (data, callback) => {
+		console.log("/deleteConversation WebSocket event");
+		const { location } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/deleteConversation -> sidekick.deleteConversation()...");
+		try {
+			const result = await sidekickInstance.deleteConversation();
+			console.log("/deleteConversation -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in deleteConversation:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('updateConversation', async (data, callback) => {
+		console.log("/updateConversation WebSocket event");
+		const { location, updateData } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/updateConversation -> sidekick.updateConversation()...");
+		try {
+			const result = await sidekickInstance.updateConversation(updateData);
+			console.log("/updateConversation -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in updateConversation:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('renameConversation', async (data, callback) => {
+		console.log("/renameConversation WebSocket event");
+		const { location, newName } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/renameConversation -> sidekick.renameConversation()...");
+		try {
+			const result = await sidekickInstance.renameConversation(newName);
+			console.log("/renameConversation -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in renameConversation:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('trimChatHistory', async (data, callback) => {
+		console.log("/trimChatHistory WebSocket event");
+		const { location, chatHistory, conversationOptions } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/trimChatHistory -> sidekick.trimChatHistory()...");
+		try {
+			const result = sidekickInstance.trimChatHistory(chatHistory, conversationOptions);
+			console.log("/trimChatHistory -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in trimChatHistory:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('getConversation', async (data, callback) => {
+		console.log("/getConversation WebSocket event");
+		const { location } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/getConversation -> sidekick.getConversation()...");
+		try {
+			const result = await sidekickInstance.getConversation();
+			console.log("/getConversation -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in getConversation:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('getConversations', async (data, callback) => {
+		console.log("/getConversations WebSocket event");
+		const { location } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/getConversations -> sidekick.getConversations()...");
+		try {
+			const result = await sidekickInstance.getConversations();
+			console.log("/getConversations -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in getConversations:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('getLastConversation', async (data, callback) => {
+		console.log("/getLastConversation WebSocket event");
+		const { location } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/getLastConversation -> sidekick.getLastConversation()...");
+		try {
+			const result = await sidekickInstance.getLastConversation();
+			console.log("/getLastConversation -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in getLastConversation:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('startConvoHere', async (data, callback) => {
+		console.log("/startConvoHere WebSocket event");
+		const { location, creationTimeId } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/startConvoHere -> sidekick.startConvoHere()...");
+		try {
+			const result = await sidekickInstance.startConvoHere(creationTimeId);
+			console.log("/startConvoHere -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in startConvoHere:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+	socket.on('talkToAPI', async (data, callback) => {
+		console.log("/talkToAPI WebSocket event");
+		const { location, sentMessage, conversationOptionsAPI } = data;
+		let conversationOptions = conversationOptionsAPI;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/talkToAPI -> sidekick.talkToAPI()...");
+		try {
+			const result = await sidekickInstance.talkToAPI(sentMessage, conversationOptions);
+			console.log("/talkToAPI -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in talkToAPI:", error);
+			callback({ success: false, error: error.message });
+		}
+	});
+
+
+
+}) // end of socket connections
 
 // POSTS
 app.post('/streamAudio', async (req, res) => {
@@ -380,6 +554,7 @@ app.post('/playAudio', async (req, res) => {
 	});
 });
 
+/*
 app.post('/createDocument', async (req, res) => {
 	console.log("/createDocument")
 	const { location } = req.body;
@@ -389,7 +564,9 @@ app.post('/createDocument', async (req, res) => {
 	console.log("/createDocument -> END")
 	res.json(result);
 });
+*/
 
+/*
 app.post('/talkToAPI', async (req, res) => {
 	console.log("/talkToAPI")
 	const { location, sentMessage, conversationOptionsAPI } = req.body;
@@ -403,7 +580,9 @@ app.post('/talkToAPI', async (req, res) => {
 	console.log("/talkToAPI -> END")
 	res.json(result);
 });
+*/
 
+/*
 app.post(`/startConvoHere`, async (req, res) => {
 	console.log("/startConvoHere")
 	const { location, creationTimeId } = req.body
@@ -413,7 +592,9 @@ app.post(`/startConvoHere`, async (req, res) => {
 	console.log("/startConvoHere -> END")
 	res.json(result)
 })
+*/
 
+/*
 app.post('/createConversation', async (req, res) => {
 	console.log("/createConversation");
 	const { location } = req.body;
@@ -423,7 +604,9 @@ app.post('/createConversation', async (req, res) => {
 	console.log("/createConversation -> END");
 	res.json(result);
 });
+*/
 
+	/*
 app.post('/deleteConversation', async (req, res) => {
 	console.log("/deleteConversation");
 	const { location } = req.body;
@@ -433,7 +616,9 @@ app.post('/deleteConversation', async (req, res) => {
 	console.log("/deleteConversation -> END");
 	res.json(result);
 });
+*/
 
+/* This isn't used?
 app.post('/saveMessage', async (req, res) => {
 	console.log("/saveMessage");
 	const { location, role, content } = req.body;
@@ -443,7 +628,9 @@ app.post('/saveMessage', async (req, res) => {
 	console.log("/saveMessage -> END");
 	res.json(result);
 });
+*/
 
+/* Not used
 app.post('/sendMessage', async (req, res) => {
 	console.log("/sendMessage");
 	const { location, sentMessage, conversationOptions } = req.body;
@@ -453,8 +640,9 @@ app.post('/sendMessage', async (req, res) => {
 	console.log("/sendMessage -> END");
 	res.json(result);
 });
+*/
 
-
+/* Not used
 app.post('/streamResponse', async (req, res) => {
 	console.log("/streamResponse");
 	const { location, sentMessage, conversationOptions } = req.body;
@@ -467,7 +655,9 @@ app.post('/streamResponse', async (req, res) => {
 	streamToResponse(stream, res);
 	console.log("/streamResponse -> END");
 });
+*/
 
+/*
 app.post('/updateConversation', async (req, res) => {
 	console.log("/updateConversation");
 	const { location, updateData } = req.body;
@@ -477,7 +667,9 @@ app.post('/updateConversation', async (req, res) => {
 	console.log("/updateConversation -> END");
 	res.json(result);
 });
+*/
 
+/* Not used?
 app.post('/updateSettings', async (req, res) => {
 	console.log("/updateSettings");
 	const { location, updateData } = req.body;
@@ -487,7 +679,9 @@ app.post('/updateSettings', async (req, res) => {
 	console.log("/updateSettings -> END");
 	res.json(result);
 });
+*/
 
+/* Not used
 app.post('/clearMessages', async (req, res) => {
 	console.log("/clearMessages");
 	const { location } = req.body;
@@ -497,7 +691,9 @@ app.post('/clearMessages', async (req, res) => {
 	console.log("/clearMessages -> END");
 	res.json(result);
 });
+*/
 
+/*
 app.post('/renameConversation', async (req, res) => {
 	console.log("/renameConversation");
 	const { location, newName } = req.body;
@@ -507,7 +703,9 @@ app.post('/renameConversation', async (req, res) => {
 	console.log("/renameConversation -> END");
 	res.json(result);
 });
+*/
 
+/*
 app.post('/trimChatHistory', async (req, res) => {
 	console.log("/trimChatHistory");
 	const { location, chatHistory, conversationOptions } = req.body;
@@ -517,9 +715,11 @@ app.post('/trimChatHistory', async (req, res) => {
 	console.log("/trimChatHistory -> END");
 	res.json(result);
 });
+*/
 
 
 // GETS
+/* Not used?
 app.get('/events', (req, res) => {
 	console.log("/events");
 	const location = JSON.parse(req.query.location);
@@ -540,7 +740,9 @@ app.get('/events', (req, res) => {
 	});
 	console.log("/events -> END");
 });
+*/
 
+/* Not used
 app.get('/getMessages', async (req, res) => {
 	console.log("/getMessages");
 	const location = JSON.parse(req.query.location);
@@ -550,7 +752,9 @@ app.get('/getMessages', async (req, res) => {
 	console.log("/getMessages -> END");
 	res.json(result);
 });
+*/
 
+/*
 app.get('/getConversations', async (req, res) => {
 	console.log("/getConversations");
 	const location = JSON.parse(req.query.location);
@@ -561,7 +765,9 @@ app.get('/getConversations', async (req, res) => {
 	console.log("/getConversations -> END");
 	res.json(result);
 });
+*/
 
+/*
 app.get('/getConversation', async (req, res) => {
 	console.log("/getConversation");
 	const location = JSON.parse(req.query.location);
@@ -571,7 +777,9 @@ app.get('/getConversation', async (req, res) => {
 	console.log("/getConversation -> END");
 	res.json(result);
 });
+*/
 
+/*
 app.get('/getLastConversation', async (req, res) => {
 	console.log("/getLastConversation");
 	const location = JSON.parse(req.query.location);
@@ -582,7 +790,7 @@ app.get('/getLastConversation', async (req, res) => {
 	console.log("/getLastConversation -> END");
 	res.json(result);
 });
-
+*/
 
 
 //take care of errors
