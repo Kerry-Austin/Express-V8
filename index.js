@@ -179,8 +179,6 @@ io.on('connection', async (socket) => {
 		socket.emit("updateMessage", {message: "Requesting text..."})
 		
 		const { location, sentMessage, conversationOptions } = data.payload;
-		//conversationOptions.max_tokens = 30 // TESTING
-		//conversationOptions.sendAudioBack = true // TESTING
 		
 		const audioId = Date.now().toString()
 
