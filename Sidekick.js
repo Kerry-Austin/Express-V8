@@ -68,7 +68,6 @@ export class Sidekick {
 		if (!docSnap.exists()) {
 			const blankDocument = {
 				userId: this.userId,
-				lastConversation: "placeholderId",
 			};
 
 			await setDoc(this.userRef, blankDocument);
@@ -117,18 +116,34 @@ export class Sidekick {
 		}
 	}
 
-	async updateSettings(testSettings) {
+	async updateSettings(userSettings) {
 		console.log("updateSettings()...");
 		try {
-			testSettings = {
-				theme: "dark",
-			};
-			await updateDoc(this.userRef, "settings", testSettings);
+			console.log("updateSettings() -> settings:", userSettings)
+			await updateDoc(this.userRef, "settings", userSettings);
 			console.log("updateSettings() -> Settings updated successfully");
 			console.log("updateSettings() -> END");
+			return this.createResponse(true)
 		} catch (error) {
 			console.error("updateSettings() -> Error updating settings:", error);
 			console.log("updateSettings() -> END");
+		}
+	}
+
+	async getSettings() {
+		console.log("getSettings()...");
+		try {
+			const snapShot = await getDoc(this.userRef, "settings")
+			console.log("getSettings() -> Got settings successfully")
+			
+			const doc = snapShot.data() // why isn't this settings already?
+			const settings = doc.settings
+			console.log("getSettings() -> settings:", settings)
+			console.log("getSettings() -> END")
+			return this.createResponse(true, settings)
+		} catch (error) {
+			console.error("getSettings() -> Error getting settings:", error);
+			console.log("getSettings() -> END");
 		}
 	}
 
@@ -323,11 +338,6 @@ async updateConversation(updatedData) {
     try {
         await updateDoc(conversationRef, updateData);
 
-        // Update the user's last conversation
-        const entireDocument = {
-            lastConversation: this.conversationId,
-        };
-        await updateDoc(this.userRef, entireDocument);
 
         const docSnapshot = await getDoc(conversationRef); // Retrieve the updated data
         console.log(`saveMessage() -> Saved ${sentMessage.role} data to conversation with ID: ${this.conversationId}`);

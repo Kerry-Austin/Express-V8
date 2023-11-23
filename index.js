@@ -13,6 +13,11 @@ import * as natural from 'natural';
 const textDecoder = new TextDecoder('utf-8');
 const tokenizer = new natural.default.SentenceTokenizer();
 
+/*
+Todo List
+[] change the websocket callbacks to use sidekickInstance.createResponse()
+*/
+
 
 
 PlayHT.init({
@@ -360,6 +365,22 @@ io.on('connection', async (socket) => {
 		}
 	});
 
+	socket.on("updateSettings", async (data, callback) => {
+		console.log("/updateSettings WebSocket event")
+		const {location, updateData} = data
+		const sideKickInstance = new Sidekick(location)
+		await sideKickInstance.updateSettings(updateData)
+		callback(sideKickInstance.createResponse(true))
+	})
+
+	socket.on("getSettings", async (data, callback) => {
+		console.log("/getSettings WebSocket event")
+		const {location} = data
+		const sideKickInstance = new Sidekick(location)
+		const settings = await sideKickInstance.getSettings()
+		callback(sideKickInstance.createResponse(true, settings))
+	})
+
 	socket.on('renameConversation', async (data, callback) => {
 		console.log("/renameConversation WebSocket event");
 		const { location, newName } = data;
@@ -422,6 +443,7 @@ io.on('connection', async (socket) => {
 
 	socket.on('getLastConversation', async (data, callback) => {
 		console.log("/getLastConversation WebSocket event");
+		console.log("USE GET SETTINGS INSTEAD!!!")
 		const { location } = data;
 		const sidekickInstance = new Sidekick(location);
 		console.log("/getLastConversation -> sidekick.getLastConversation()...");
