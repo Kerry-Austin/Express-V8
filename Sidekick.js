@@ -62,7 +62,7 @@ export class Sidekick {
 	}
 
 	async createDocument() {
-		console.log("createDocument()...");
+		console.log("createDocument()");
 		const docSnap = await getDoc(this.userRef);
 
 		if (!docSnap.exists()) {
@@ -82,7 +82,7 @@ export class Sidekick {
 	}
 
 	async createConversation() {
-		console.log("createConversation()...");
+		console.log("createConversation()");
 		try {
 			const blankConversation = {
 				conversationId: this.conversationId,
@@ -103,13 +103,15 @@ export class Sidekick {
 				console.log(`createConversation() -> Created conversation with ID: ${this.conversationId}`);
 				console.log("createConversation() -> END");
 				return this.createResponse(true);
-			} else {
+			} 
+			else {
 				console.log("createConversation() -> Conversation already exists");
 				console.log("createConversation() -> END");
 				return this.createResponse(false, null, `Conversation already exists, conversationId: ${this.conversationId}`);
 			}
 
-		} catch (error) {
+		} 
+		catch (error) {
 			console.error(`createConversation() -> Error creating conversation: ${error}`);
 			console.log("createConversation() -> END");
 			return this.createResponse(false, null, error);
@@ -117,7 +119,7 @@ export class Sidekick {
 	}
 
 	async updateSettings(userSettings) {
-		console.log("updateSettings()...");
+		console.log("updateSettings()");
 		try {
 			console.log("updateSettings() -> settings:", userSettings)
 			await updateDoc(this.userRef, "settings", userSettings);
@@ -131,7 +133,7 @@ export class Sidekick {
 	}
 
 	async getSettings() {
-		console.log("getSettings()...");
+		console.log("getSettings()");
 		try {
 			const snapShot = await getDoc(this.userRef, "settings")
 			console.log("getSettings() -> Got settings successfully")
@@ -148,7 +150,7 @@ export class Sidekick {
 	}
 
 	async getConversations() {
-		console.log("getConversations()...");
+		console.log("getConversations()");
 		try {
 			const querySnapshot = await getDocs(this.conversationsRef);
 			const conversations = querySnapshot.docs.map(doc => doc.data());
@@ -163,7 +165,7 @@ export class Sidekick {
 	}
 
 	async getLastConversation() {
-		console.log("getLastConversation()...");
+		console.log("getLastConversation()");
 		try {
 			const querySnapshot = await getDoc(this.userRef);
 			const lastConversation = querySnapshot.data().lastConversation;
@@ -178,7 +180,10 @@ export class Sidekick {
 	}
 
 	async getConversation() {
-		console.log(`getConversation(${this.conversationId})...`);
+		console.log(`getConversation(${this.conversationId})`);
+		console.log("getConversation() -> createConversation()... HOTFIX")
+		// the createConversation hotfix should go in the else statement vs everytime
+		await this.createConversation()
 		const conversationRef = doc(this.conversationsRef, this.conversationId);
 		try {
 			const conversationSnapshot = await getDoc(conversationRef);
@@ -188,8 +193,9 @@ export class Sidekick {
 				const data = conversation;
 				console.log(`getConversation(${this.conversationId}) -> END`);
 				return this.createResponse(true, data);
-			} else {
-				console.error(`getConversation(${this.conversationId}) -> Conversation with ID: ${this.conversationId} does not exist`);
+			} 
+			else {
+				console.error(`getConversation(${this.conversationId}) -> Conversation with ID: ${this.conversationId} does not exist. Making it...`);
 				console.log(`getConversation(${this.conversationId}) -> END`);
 				return this.createResponse(false, null, 'Conversation not found');
 			}
@@ -201,7 +207,7 @@ export class Sidekick {
 	}
 
 	async renameConversation(newName) {
-    console.log(`renameConversation(${this.conversationId}, ${newName})...`);
+    console.log(`renameConversation(${this.conversationId}, ${newName})`);
     const conversationRef = doc(this.conversationsRef, this.conversationId);
     try {
         await updateDoc(conversationRef, {
@@ -219,7 +225,7 @@ export class Sidekick {
 }
 
 async deleteConversation() {
-    console.log(`deleteConversation(${this.conversationId})...`);
+    console.log(`deleteConversation(${this.conversationId})`);
     const conversationRef = doc(this.conversationsRef, this.conversationId);
     try {
         await deleteDoc(conversationRef);
@@ -234,7 +240,7 @@ async deleteConversation() {
 }
 
 async updateConversation(updatedData) {
-    console.log(`updateConversation(${this.conversationId})...`);
+    console.log(`updateConversation(${this.conversationId})`);
     const conversationRef = doc(this.conversationsRef, this.conversationId);
     try {
         await updateDoc(conversationRef, updatedData);
@@ -250,7 +256,7 @@ async updateConversation(updatedData) {
 
 
 	async startConvoHere(creationTimeId) {
-			console.log(`startConvoHere(${creationTimeId})...`);
+			console.log(`startConvoHere(${creationTimeId})`);
 
 			// Get the existing conversation data
 			const getResponse = await this.getConversation();
@@ -316,7 +322,7 @@ async updateConversation(updatedData) {
 
 
 	async saveMessage(sentMessage, conversationOptions) {
-    console.log("saveMessage()...");
+    console.log("saveMessage()");
     const conversationRef = doc(this.conversationsRef, this.conversationId);
 
     const { systemMessage, staticMemory } = conversationOptions;
@@ -351,7 +357,7 @@ async updateConversation(updatedData) {
 }
 
 	trimChatHistory = (chatHistory, conversationOptions) => {
-    console.log("trimChatHistory()...");
+    console.log("trimChatHistory()");
     let { limitType, chosenLimit } = conversationOptions;
     limitType = "tokens"; // For testing purposes only
     chosenLimit = 12000; // For testing purposes only
@@ -413,7 +419,7 @@ async updateConversation(updatedData) {
 
 
 	async getMessages() {
-    console.log(`getMessages(${this.conversationId})...`);
+    console.log(`getMessages(${this.conversationId})`);
     const conversationRef = doc(this.conversationsRef, this.conversationId);
     try {
         const conversationSnapshot = await getDoc(conversationRef);
@@ -435,7 +441,7 @@ async updateConversation(updatedData) {
 }
 
 async clearMessages() {
-    console.log(`clearMessages(${this.conversationId})...`);
+    console.log(`clearMessages(${this.conversationId})`);
     const conversationRef = doc(this.conversationsRef, this.conversationId);
     try {
         await updateDoc(conversationRef, {
@@ -459,7 +465,7 @@ async clearMessages() {
 	// using streamResponse() instead
 	/*
 	{
-		console.log("=> sendMessage()...")
+		console.log("=> sendMessage()")
 		sentMessage.tokenCount = openaiTokenCounter.text(sentMessage.content, "gpt-3.5-turbo") // RQ'd for trimChatHistory()
 		console.log(sentMessage, conversationOptions)
 
@@ -543,7 +549,7 @@ async clearMessages() {
 	*/ { console.error("not used") }
 
 	async streamResponse(sentMessage, conversationOptions) {
-    console.log("streamResponse()...");
+    console.log("streamResponse()");
     console.log("streamResponse() -> Given:", { sentMessage }, { conversationOptions });
     sentMessage = {
         ...sentMessage,
@@ -642,7 +648,7 @@ async clearMessages() {
 	}
 
 	async talkToAPI(sentMessage, conversationOptions = {}) {
-    console.log("talkToAPI()...");
+    console.log("talkToAPI()");
     console.log("talkToAPI() -> Given:", { sentMessage }, { conversationOptions });
 
     // Extract needed values from conversationOptions using destructuring
