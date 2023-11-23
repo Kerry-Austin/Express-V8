@@ -195,7 +195,7 @@ export class Sidekick {
 				return this.createResponse(true, data);
 			} 
 			else {
-				console.error(`getConversation(${this.conversationId}) -> Conversation with ID: ${this.conversationId} does not exist. Making it...`);
+				console.error(`getConversation(${this.conversationId}) -> Conversation with ID: ${this.conversationId} does not exist.`);
 				console.log(`getConversation(${this.conversationId}) -> END`);
 				return this.createResponse(false, null, 'Conversation not found');
 			}
