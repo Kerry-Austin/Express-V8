@@ -22,6 +22,10 @@ const backupApiKey = process.env['apikey']
 const openai_BACKUP = new OpenAI({
 				apiKey: backupApiKey,
 		});
+const modelToUse = "gpt-3.5-turbo"
+// openAI = gpt-3.5-turbo || gpt-4-1106-preview
+// openRouter = openai/gpt-3.5-turbo
+
 let openai = new OpenAI({
         apiKey: "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",
         baseURL: "https://openrouter.ai/api/v1",
@@ -559,7 +563,7 @@ async clearMessages() {
     const {
         systemMessage,
         staticMemory,
-        model = "gpt-4-1106-preview",
+        model = modelToUse,
         temperature,
         max_tokens,
         limitType,
@@ -655,7 +659,7 @@ async clearMessages() {
     const {
         systemMessage,
         staticMemory,
-        model = "gpt-3.5-turbo", //"openai/gpt-3.5-turbo", // default model
+        model = modelToUse, //"openai/gpt-3.5-turbo", // default model
         temperature,
         max_tokens
     } = conversationOptions;
