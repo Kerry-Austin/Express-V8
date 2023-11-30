@@ -29,7 +29,7 @@ PlayHT.init({
 
 const voiceOptions = {
 	apiOptions: {
-		 quality: 'draft',
+		quality: 'draft',
 		temperature: 0.1,
 	},
 	sentencesPerCall: 1,
@@ -48,10 +48,10 @@ app.use(cors({ origin: '*' }));
 const server = app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+	cors: {
+		origin: "*",
+		methods: ["GET", "POST"]
+	}
 });
 
 
@@ -105,16 +105,17 @@ const createNewReadable = () => new Readable({ read() { } });
 
 io.on('connection', async (socket) => {
 	console.log('io.on(connection) -> New socket connected!');
+	socket.emit("severData", { whisperAPI: process.env['whisperAPI'] })
 	//console.log("io.on(connection) -> ALL SOCKETS:")
 	//console.log(Object.keys(io.sockets.sockets));
 
 	// Function to handle audio streaming for a group
 	let audioState = {
-			pendingGroups: [], // [x]
-			okayToSend: true, // [x]
-			groupNumber: 0 // [x]
+		pendingGroups: [], // [x]
+		okayToSend: true, // [x]
+		groupNumber: 0 // [x]
 	};
-	
+
 	async function handleAudioGroup(group, audioState, audioId) {
 		console.log("handleAudioGroup() -> group:", group)
 		audioState.groupNumber += 1;
@@ -133,7 +134,7 @@ io.on('connection', async (socket) => {
 
 			// Check if the buffer size has reached the target size (8KB)
 			if (audioBuffer.length >= targetSize) {
-				socket.emit("audioChunk", {audioId, audioBuffer, group});  // Send buffered audio
+				socket.emit("audioChunk", { audioId, audioBuffer, group });  // Send buffered audio
 				console.log(`audioStream.on(data) -> GROUP #${currentGroup}: Sent ${audioBuffer.length} bytes!`);
 				audioBuffer = Buffer.alloc(0);  // Reset the buffer
 			}
@@ -142,18 +143,18 @@ io.on('connection', async (socket) => {
 		audioStream.on('end', () => {
 			console.log("audioStream.on(end)")
 			audioState.okayToSend = true;
-			
+
 			if (audioBuffer.length > 0) {
-				socket.emit("audioChunk", {audioId, audioBuffer, group});  // Send any remaining audio
-				socket.emit("audioCompleted", {audioId})
+				socket.emit("audioChunk", { audioId, audioBuffer, group });  // Send any remaining audio
+				socket.emit("audioCompleted", { audioId })
 			}
 			if (audioState.pendingGroups.length) {
 				const nextGroup = audioState.pendingGroups.shift();
 				handleAudioGroup(nextGroup, audioState, audioId);
 				console.log(`audioStream.on(end) -> FINAL GROUP: Sent ${audioBuffer.length} bytes!`);
 			}
-			else{
-				socket.emit("audioCompleted", {audioId})
+			else {
+				socket.emit("audioCompleted", { audioId })
 			}
 		});
 		audioStream.on('error', error => console.log(`Stream error: ${error}`));
@@ -181,10 +182,10 @@ io.on('connection', async (socket) => {
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
 		console.log('socket.on(textRequest');
-		socket.emit("updateMessage", {message: "Requesting text..."})
-		
+		socket.emit("updateMessage", { message: "Requesting text..." })
+
 		const { location, sentMessage, conversationOptions } = data.payload;
-		
+
 		const audioId = Date.now().toString()
 
 		let sentenceBuffer = '';
@@ -197,26 +198,26 @@ io.on('connection', async (socket) => {
 		for await (const chunk of streamingText) {
 			const decodedTextChunk = textDecoder.decode(chunk)
 			const textChunk = decodedTextChunk.toString();
-			socket.emit(`textChunk`, {textChunk})
-			
+			socket.emit(`textChunk`, { textChunk })
+
 			sentenceBuffer += textChunk;
 			const sentences = tokenizer.tokenize(sentenceBuffer);
-			
+
 			while (sentences.length > maxSentenceCount) {
 				const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
 
-				
+
 				if (audioState.okayToSend && conversationOptions.sendAudioBack) {
 					await handleAudioGroup(sentenceSubset, audioState, audioId);
-				} 
+				}
 				else {
 					audioState.pendingGroups.push(sentenceSubset);
 				}
 				sentenceBuffer = sentences.join(' ');
-				
-				
+
+
 			}
-	 		
+
 		}
 		if (sentenceBuffer && conversationOptions.sendAudioBack) {
 			// Handle any remaining sentences here
@@ -226,13 +227,13 @@ io.on('connection', async (socket) => {
 				audioState.pendingGroups.push(sentenceBuffer);
 			}
 		}
-		
-	
+
+
 	});
 
 	socket.on(`playMessage`, async (data) => {
 		console.log('socket.on(playMessage)');
-		socket.emit("updateMessage", {message: "Getting audio..."})
+		socket.emit("updateMessage", { message: "Getting audio..." })
 		const sentMessageContent = data.payload
 		const audioId = Date.now().toString()
 
@@ -249,18 +250,18 @@ io.on('connection', async (socket) => {
 
 			// Iterate over the sentences
 			sentences.forEach(sentence => {
-					currentChunk.push(sentence);
+				currentChunk.push(sentence);
 
-					// When the current chunk reaches the max sentence count, add it to chunks
-					if (currentChunk.length > maxSentencesPerChunk) {
-							chunks.push(currentChunk.join(' '));
-							currentChunk = []; // Reset current chunk
-					}
+				// When the current chunk reaches the max sentence count, add it to chunks
+				if (currentChunk.length > maxSentencesPerChunk) {
+					chunks.push(currentChunk.join(' '));
+					currentChunk = []; // Reset current chunk
+				}
 			});
 
 			// Add any remaining sentences as the last chunk
 			if (currentChunk.length > 0) {
-					chunks.push(currentChunk.join(' '));
+				chunks.push(currentChunk.join(' '));
 			}
 
 			return chunks;
@@ -295,30 +296,44 @@ io.on('connection', async (socket) => {
 		}
 	})
 
+	socket.on(`getAPIKey`, async (data, callback) => {
+		console.log("/getAPIKey Websocket event")
+		try {
+			const serverSideAPIKey = process.env['whisperAPI']
+			console.log({serverSideAPIKey})
+			console.log("/getAPIKey -> END")
+			callback({ success: true, data: serverSideAPIKey })
+		}
+		catch (error) {
+			console.error("Error in getAPIKey:", error);
+			callback({ success: false, error: error.message });
+		}
+	})
+
 	socket.on('createDocument', async (data, callback) => {
-	console.log("/createDocument WebSocket event");
-	const { location } = data;
-	const sidekickInstance = new Sidekick(location);
-	console.log("/createDocument -> sidekick.createDocument()...");
-	try {
-		const result = await sidekickInstance.createDocument();
-		console.log("/createDocument -> END");
-		callback({ success: true, data: result });
-	} catch (error) {
-		console.error("Error in createDocument:", error);
-		callback({ success: false, error: error.message });
-	}
+		console.log("/createDocument WebSocket event");
+		const { location } = data;
+		const sidekickInstance = new Sidekick(location);
+		console.log("/createDocument -> sidekick.createDocument()...");
+		try {
+			const result = await sidekickInstance.createDocument();
+			console.log("/createDocument -> END");
+			callback({ success: true, data: result });
+		} catch (error) {
+			console.error("Error in createDocument:", error);
+			callback({ success: false, error: error.message });
+		}
 
 
 
 
 
-	
 
-	socket.on('disconnect', () => {
-		console.log('socket.on(disconnnect) -> Socket closed!');
+
+		socket.on('disconnect', () => {
+			console.log('socket.on(disconnnect) -> Socket closed!');
+		});
 	});
-});
 
 	socket.on('createConversation', async (data, callback) => {
 		console.log("/createConversation WebSocket event");
@@ -367,7 +382,7 @@ io.on('connection', async (socket) => {
 
 	socket.on("updateSettings", async (data, callback) => {
 		console.log("/updateSettings WebSocket event")
-		const {location, updateData} = data
+		const { location, updateData } = data
 		const sideKickInstance = new Sidekick(location)
 		await sideKickInstance.updateSettings(updateData)
 		callback(sideKickInstance.createResponse(true))
@@ -375,7 +390,7 @@ io.on('connection', async (socket) => {
 
 	socket.on("getSettings", async (data, callback) => {
 		console.log("/getSettings WebSocket event")
-		const {location} = data
+		const { location } = data
 		const sideKickInstance = new Sidekick(location)
 		const settings = await sideKickInstance.getSettings()
 		callback(sideKickInstance.createResponse(true, settings))
@@ -626,15 +641,15 @@ app.post('/createConversation', async (req, res) => {
 });
 */
 
-	/*
+/*
 app.post('/deleteConversation', async (req, res) => {
-	console.log("/deleteConversation");
-	const { location } = req.body;
-	const sidekickInstance = new Sidekick(location);
-	console.log("/deleteConversation -> sidekick.deleteConversation()...");
-	const result = await sidekickInstance.deleteConversation();
-	console.log("/deleteConversation -> END");
-	res.json(result);
+console.log("/deleteConversation");
+const { location } = req.body;
+const sidekickInstance = new Sidekick(location);
+console.log("/deleteConversation -> sidekick.deleteConversation()...");
+const result = await sidekickInstance.deleteConversation();
+console.log("/deleteConversation -> END");
+res.json(result);
 });
 */
 
