@@ -235,6 +235,7 @@ io.on('connection', async (socket) => {
 		console.log('socket.on(playMessage)');
 		socket.emit("updateMessage", { message: "Getting audio..." })
 		const sentMessageContent = data.payload
+		console.log({sentMessageContent})
 		const audioId = Date.now().toString()
 
 
