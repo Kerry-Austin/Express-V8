@@ -115,6 +115,13 @@ io.on('connection', async (socket) => {
 		okayToSend: true, // [x]
 		groupNumber: 0 // [x]
 	};
+	function resetAudioState() {
+		audioState = {
+			pendingGroups: [],
+			okayToSend: true,
+			groupNumber: 0
+		};
+	}
 
 	async function handleAudioGroup(group, audioState, audioId) {
 		console.log("handleAudioGroup() -> group:", group)
@@ -183,6 +190,7 @@ io.on('connection', async (socket) => {
 	socket.on('textRequest', async (data) => {
 		console.log('socket.on(textRequest');
 		socket.emit("updateMessage", { message: "Requesting text..." })
+		resetAudioState()
 
 		const { location, sentMessage, conversationOptions } = data.payload;
 
@@ -234,8 +242,9 @@ io.on('connection', async (socket) => {
 	socket.on(`playMessage`, async (data) => {
 		console.log('socket.on(playMessage)');
 		socket.emit("updateMessage", { message: "Getting audio..." })
+		resetAudioState()
 		const sentMessageContent = data.payload
-		console.log({sentMessageContent})
+		console.log({ sentMessageContent })
 		const audioId = Date.now().toString()
 
 
@@ -301,7 +310,7 @@ io.on('connection', async (socket) => {
 		console.log("/getAPIKey Websocket event")
 		try {
 			const serverSideAPIKey = process.env['whisperAPI']
-			console.log({serverSideAPIKey})
+			console.log({ serverSideAPIKey })
 			console.log("/getAPIKey -> END")
 			callback({ success: true, data: serverSideAPIKey })
 		}
