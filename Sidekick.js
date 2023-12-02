@@ -466,99 +466,11 @@ async clearMessages() {
 
 	async useToolbox (messages) {
 		console.log("useToolbox")
-		role = "system"
-		context = "Always speak in riddles."
+		let role = "system"
+		let context = "One use one sentence."
 
-		return {role: role, cotent: context}
+		return {role: role, content: context}
 	}
-
-
-	async sendMessage(sentMessage, conversationOptions)
-	// using streamResponse() instead
-	/*
-	{
-		console.log("=> sendMessage()")
-		sentMessage.tokenCount = openaiTokenCounter.text(sentMessage.content, "gpt-3.5-turbo") // RQ'd for trimChatHistory()
-		console.log(sentMessage, conversationOptions)
-
-
-		const {
-			systemMessage,
-			staticMemory,
-			model = "openai/gpt-3.5-turbo", // default model
-			temperature,
-			max_tokens
-		} = conversationOptions;
-
-		const getConversation_response = await this.getConversation()
-		const conversation = getConversation_response.data.conversation
-		let chatHistory = conversation.messages || []
-		chatHistory.push(sentMessage)
-
-		// Filter falsey values (eg, undefiended), join, and push to chatHistory
-		let systemContent = [systemMessage, staticMemory]
-			.filter(Boolean).join(' ')
-		if (systemContent) {
-			chatHistory.push({ role: 'system', content: systemContent });
-		}
-
-		// Trim down chatHistory for bot response to use
-		//console.log("SENT MESSAGE:", sentMessage)
-		let trimResponse
-		trimResponse = this.trimChatHistory(chatHistory)
-		let { trimmedChatHistory } = trimResponse.data
-		//console.log("TRIMMED CHAT HX:", trimmedChatHistory)
-
-		// API call
-		trimmedChatHistory = trimmedChatHistory.map(message => ({ role: message.role, content: message.content }))
-		console.log("CHAT CONTEXT:", trimmedChatHistory)
-		const openai = new OpenAI({
-			apiKey: "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",
-			baseURL: "https://openrouter.ai/api/v1",
-			defaultHeaders: {
-				// this will be fixed later, this header is from the example code, the API breaks without a header?
-				"HTTP-Referer": "https://github.com/OpenRouterTeam/openrouter-examples",
-			},
-		})
-		const apiOptions = {
-			messages: chatHistory.map(message => ({ role: message.role, content: message.content })),
-			model,
-			...(temperature && { temperature }),
-			...(max_tokens && { max_tokens })
-		};
-		const completion = await openai.chat.completions.create(apiOptions)
-		let botMessage = completion.choices[0].message
-		console.log("botMessage:", botMessage)
-		botMessage = {
-			...botMessage,
-			creationTimeId: `msg${Date.now().toString()}`,
-			tokenCount: openaiTokenCounter.text(botMessage.content, "gpt-3.5-turbo")
-		}
-
-		//Save message data & update local chatHistory
-		chatHistory.push(botMessage)
-		await this.saveMessage(sentMessage, conversationOptions)
-		await this.saveMessage(botMessage, conversationOptions)
-
-		// plan is to include these in the response definition
-		// [] add options from conversation to trimChatHistory()
-		trimResponse = this.trimChatHistory(chatHistory)
-		const { removedMessages } = trimResponse.data
-		const { currentTokenCount } = trimResponse.data
-
-		//prep final response
-		let response = {
-			...botMessage,
-			removedMessages,
-			currentTokenCount,
-			messageCount: chatHistory.length,
-			// firstMessage: (chatHistory.length > 3),
-		}
-
-		console.log("END sendMessage()")
-		return this.createResponse(true, response)
-	}
-	*/ { console.error("not used") }
 
 	async streamResponse(sentMessage, conversationOptions) {
     console.log("streamResponse()");
@@ -603,10 +515,7 @@ async clearMessages() {
 
     const addedContext = await this.useToolbox(trimmedChatHistory)
 
-		trimmedChatHistory = {
-			...trimmedChatHistory,
-			addedContext
-		}
+		trimmedChatHistory.push(addedContext)
     	
     const apiOptions = {
         messages: trimmedChatHistory,
