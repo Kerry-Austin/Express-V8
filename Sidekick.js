@@ -464,6 +464,14 @@ async clearMessages() {
     }
 }
 
+	async useToolbox (messages) {
+		console.log("useToolbox")
+		role = "system"
+		context = "Always speak in riddles."
+
+		return {role: role, cotent: context}
+	}
+
 
 	async sendMessage(sentMessage, conversationOptions)
 	// using streamResponse() instead
@@ -593,12 +601,15 @@ async clearMessages() {
 
     trimmedChatHistory = trimmedChatHistory.map(message => ({ role: message.role, content: message.content }));
 
-    
+    const addedContext = await this.useToolbox(trimmedChatHistory)
 
-    
-		
+		trimmedChatHistory = {
+			...trimmedChatHistory,
+			addedContext
+		}
+    	
     const apiOptions = {
-        messages: trimmedChatHistory.map(message => ({ role: message.role, content: message.content })),
+        messages: trimmedChatHistory,
         model,
         stream: true,
         ...(temperature && { temperature }),
