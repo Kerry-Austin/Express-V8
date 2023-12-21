@@ -115,6 +115,9 @@ io.on('connection', async (socket) => {
 		okayToSend: true, // [x]
 		groupNumber: 0 // [x]
 	};
+
+	let temp_thoughtProcess = []
+	
 	function resetAudioState() {
 		audioState = {
 			pendingGroups: [],
@@ -188,7 +191,7 @@ io.on('connection', async (socket) => {
 
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
-		console.log('socket.on(textRequest');
+		console.log('socket.on(textRequest)');
 		socket.emit("updateMessage", { message: "Requesting text..." })
 		resetAudioState()
 
@@ -200,7 +203,10 @@ io.on('connection', async (socket) => {
 		const maxSentenceCount = voiceOptions.sentencesPerCall
 
 		const sidekickInstance = new Sidekick(location);
+		// temp_thoughtProcess doesn't work for new conversations, deleting, etc
+		sidekickInstance.setThoughtProcess(temp_thoughtProcess)
 		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
+		temp_thoughtProcess = sidekickInstance.getThoughtProcess()
 
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
