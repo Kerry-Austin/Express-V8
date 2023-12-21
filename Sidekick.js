@@ -18,9 +18,10 @@ import fetch from 'node-fetch';
 import { Readable } from 'stream';
 
 
-const backupApiKey = process.env['apikey']
+const backupApiKey = process.env['apikeyV2']
+console.log({backupApiKey})
 const openai_BACKUP = new OpenAI({
-				apiKey: backupApiKey,
+				apiKey: "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",
 		});
 const modelToUse = "gpt-3.5-turbo"
 // openAI = gpt-3.5-turbo || gpt-4-1106-preview
