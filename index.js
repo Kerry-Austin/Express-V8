@@ -66,7 +66,7 @@ let userSocketMap = new Map() // (userId, ws)
 
 
 app.get('/', (req, res) => {
-	res.send('The API is up and running!');
+	res.send('The API is up and running! Maybe.');
 });
 
 
@@ -116,7 +116,6 @@ io.on('connection', async (socket) => {
 		groupNumber: 0 // [x]
 	};
 
-	let temp_thoughtProcess = []
 	
 	function resetAudioState() {
 		audioState = {
@@ -201,12 +200,11 @@ io.on('connection', async (socket) => {
 
 		let sentenceBuffer = '';
 		const maxSentenceCount = voiceOptions.sentencesPerCall
-
+		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+		console.log({location}, {sentMessage}, {conversationOptions})
 		const sidekickInstance = new Sidekick(location);
-		// temp_thoughtProcess doesn't work for new conversations, deleting, etc
-		sidekickInstance.setThoughtProcess(temp_thoughtProcess)
 		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
-		temp_thoughtProcess = sidekickInstance.getThoughtProcess()
+		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
@@ -315,7 +313,7 @@ io.on('connection', async (socket) => {
 	socket.on(`getAPIKey`, async (data, callback) => {
 		console.log("/getAPIKey Websocket event")
 		try {
-			const serverSideAPIKey = process.env['whisperAPI']
+			const serverSideAPIKey = process.env['apiKeyV2']
 			console.log({ serverSideAPIKey })
 			console.log("/getAPIKey -> END")
 			callback({ success: true, data: serverSideAPIKey })

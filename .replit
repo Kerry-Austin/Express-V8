@@ -86,5 +86,5 @@ pattern = "**/{*.js,*.jsx,*.ts,*.tsx,*.json}"
 start = "typescript-language-server --stdio"
 
 [deployment]
-deploymentTarget = "static"
-publicDir = "/"
+deploymentTarget = "gce"
+run = ["sh", "-c", "npm start"]
