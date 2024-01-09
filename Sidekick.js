@@ -62,12 +62,13 @@ const db = getFirestore(app);
 
 
 export class Sidekick {
-	constructor(location) {
+	constructor(location, socket = null) {
 		this.userId = location.userId.toString();
 		this.conversationId = location.conversationId.toString();
 		this.userRef = doc(db, 'ConversationsByUser', this.userId);
 		this.conversationsRef = collection(this.userRef, 'conversations');
 		console.log(`=====> New Instance created, userId: ${this.userId} conversationId: ${this.conversationId}`);
+		this.socket = socket
 	}
 
 	createResponse(success, data = null, error = null) {
@@ -521,17 +522,11 @@ export class Sidekick {
 		console.log("************************************************************")
 		console.log("reasoningEngine()")
 		console.log("reasoningEngine() -> getThoughtProcess()...")
-		let original_thoughtProcess = await this.getThoughtProcess()
-		console.log({ original_thoughtProcess })
+		this.socket.emit("progressMessage", { message: "REASONING ENGINE!!!!" })
+		//[] delete method from class
+		//let original_thoughtProcess = await this.getThoughtProcess()
 
-
-		let userInstructions = original_thoughtProcess.userInstructions
-		let objective = original_thoughtProcess.objective
-		let objectiveStatement = original_thoughtProcess.objectiveStatement
-		let plan = original_thoughtProcess.plan
-		let planStatement = original_thoughtProcess.planStatement
-
-		const toolBox = [
+		let toolBox = [
 			// talk
 			{
 				type: "function",
@@ -567,14 +562,17 @@ export class Sidekick {
 			*/
 
 		];
+		//toolBox = []
 		const toolBoxNames = toolBox.map(object => object.function.name);
 		// array -> eg ["calculator", "get_weather", "google_search"]
+
 		let toolString = ``
 		toolBox.forEach(tool => {
 			toolString += `Tool name: ${tool.function.name}:\nDescription: ${tool.function.description}\n\n`
 		})
-		const toolStatement = `\n\nThese are the tools currently available to the assistant. If the tool isn't given then the action isn't available. For example, if there is no email tool given, the assistant can't access the user's email.\n\n--- BEGIN TOOL LIST ---\n\n${toolString}\n--- END TOOL LIST ---\n\n`
-		//console.log({ toolStatement })
+		let toolsAvailable = `\n\n${toolString}\n\n`
+		if (toolString === "") { toolsAvailable = "N/A" }
+		console.log({ toolsAvailable })
 
 		const apiConfig = { ...apiOptions }
 		//console.log({ apiConfig })
@@ -594,22 +592,21 @@ export class Sidekick {
 		//console.log({lastUserMessage})
 
 
+		let userInstructions = ``
 		if (systemMessages) {
-			userInstructions = '\n\nThe user has given the following instructions for the assistant. Make sure the assistant follows them closely:\n\n--- BEGIN ASSISTANT INSTRUCTIONS ---\n\n'
 			systemMessages.forEach(systemMessage => {
 				userInstructions += `\n${systemMessage.content}`
 			})
-			userInstructions += `\n\n--- END ASSISTANT INSTRUCTIONS ---\n\n`
 		}
 
 
 		// Functions
-		async function talkToBot(message = "", messageHistory = [], apiConfig, tools = []) {
+		async function agentCore(instructions = "", messageHistory = [], apiConfig, tools = []) {
 			const { model } = apiConfig
 			if (tools.length === 0) {
-				console.log("talkToBot() -> tools.length = 0")
-				if (message) {
-					const command = { role: "system", content: message }
+				console.log("agentCore() -> tools.length = 0")
+				if (instructions) {
+					const command = { role: "system", content: instructions }
 					messageHistory.push(command)
 				}
 				const completion = await openai.chat.completions.create({
@@ -621,11 +618,21 @@ export class Sidekick {
 				return botMessage
 			}
 			if (tools.length === 1) {
-				console.log("talkToBot() -> tools.length = 1")
+				console.log("agentCore() -> tools.length = 1")
 				//console.log(`TOOL: ${tools[0].function.name}`)
-				if (message) {
-					const command = { role: "system", content: message }
+				if (instructions) {
+					const command = { role: "system", content: instructions }
 					messageHistory.push(command)
+				}
+				if (apiConfig.streamResponse === true) {
+					const stream = await openai.chat.completions.create({
+						messages: messageHistory,
+						model: model,
+						tools: tools,
+						stream: true,
+						tool_choice: { type: "function", function: { name: `${tools[0].function.name}` } },
+					});
+					return stream
 				}
 				const completion = await openai.chat.completions.create({
 					messages: messageHistory,
@@ -642,8 +649,8 @@ export class Sidekick {
 				return action
 			}
 			if (tools.length > 1) {
-				console.log("talkToBot() -> tools.length > 1")
-				const command = { role: "system", content: message }
+				console.log("agentCore() -> tools.length > 1")
+				const command = { role: "system", content: instructions }
 				const messageHistory_copy = [command, ...messageHistory]
 				// hard copy to avoid a double command push on re-run
 				const arrayOfGivenToolNames = tools.map(object => object.function.name);
@@ -683,338 +690,390 @@ export class Sidekick {
 				const selectedTool = toolBox.filter((tool) => {
 					return tool.function.name === selectedAction.action
 				})
-				const action = await talkToBot(message, messageHistory, apiConfig, selectedTool)
+				const action = await agentCore(instructions, messageHistory, apiConfig, selectedTool)
 				return action
 			}
 		}
-		async function createFirstThoughtProcess() {
-			messageHistory.push({ role: "user", content: "What's up?" })
-			await objectiveAgent()
-			await planningAgent()
+		async function getAgentInstructions(agentRole, thoughtProcessLog) {
+			
+			const thoughtProcessLogString = convertThoughtProcessLogToString(thoughtProcessLog)
+			const agentInstructions = {
+				instructions:
+					`As part of an advanced decision-making system, your role is crucial in processing the user's input and contributing to the system's overall response. This system operates on a Think and Act loop, where agents like you collaborate to generate thoughts, execute actions, and observe the outcomes. 
+
+			The Thought Process Log is a critical component of this system. It records the sequence of thoughts, actions, and observations made by the agents throughout the decision-making process. Your contributions to this log are essential for maintaining a coherent and context-aware interaction with the user.
+
+			- Thought Process Log: A dynamic record of the system's thought process, actions taken, and their results. Each entry in the log helps inform subsequent decisions and actions.
+
+			- Agents in the System:
+			- Thinking Agent: Responsible for analyzing the current situation and determining the next logical step.
+			- Acting Agent: Executes actions based on the thinking agent's decisions.
+			- Observing Agent: Observes and logs the outcomes of actions taken.
+			- Responding Agent: Reviews the Thought Process Log to formulate the final response to the user.
+
+			Tools Available: ${toolsAvailable}
+			These are the tools at your disposal, each designed for specific functions within the system. Select the appropriate tool based on the current need and your specific role.
+
+			User Instructions: ${userInstructions}
+			These instructions from the user guide how the assistant should behave and respond. It's crucial to align your actions with these expectations for an effective and satisfactory user experience.
+
+			Your specific role in this process is to ${agentRole}. Utilize the Thought Process Log, the available tools, and the user instructions to guide your actions and contribute effectively to the assistant's response.
+
+			Current Thought Process Log:
+			${thoughtProcessLogString}
+
+			This is the current state of the Thought Process Log, which includes all previous thoughts, actions, and observations. Use this information to understand the context of your decision-making and actions within the loop.
+			`}
+			return agentInstructions.instructions
 		}
-		async function objectiveAgent(previousObjective = "", feedback = "") {
-			const objectiveMaker = [
-				{
-					type: "function",
-					function: {
-						name: "Determine_Objective",
-						description: "Provides an objective for the AI assistant's next response to the user. The objective should be about 3 sentences.",
-						parameters: {
-							type: "object",
-							properties: {
-								objective: {
-									type: "string",
-									description: "The objective for the AI assistant's next response.",
-								},
-								reasoning: {
-									type: "string",
-									description: "The reasoning behind the objective",
-								},
-							},
-							required: ["objective", "reasoning"],
-						},
-					},
+		function convertThoughtProcessLogToString(thoughtProcessLog) {
+			return thoughtProcessLog.map(item => {
+				if (item.thought) {
+					return `Thought: ${item.thought}`;
+				} else if (item.action) {
+					return `Action: ${item.action}`;
+				} else if (item.observation) {
+					return `Observation: ${item.observation}`;
 				}
-			]
-			//console.log({ userInstructions })
-			if (previousObjective) {
-				previousObjective = `\n\nThe previous objective has be given for addtional context:\n\n--- BEGIN LAST OBJECTIVE ---\n\n${previousObjective}\n\n--- END LAST OBJECTUVE ---\n\n`
-			}
-			if (feedback) {
-				feedback = `\n\nA seperate ai agent designed to provide assistance has the current feedback for creating the new objective: "${feedback}"\n\n`
-			}
-			const commandPrompt = `You are part of a decision making system. Your goal is to examine the conversation and provide an objective for the AI assistant's next response to the user. The objective should be about 3 sentences.${userInstructions}${previousObjective}${feedback}\n\nMake sure to follow the instructions given by the user when making the new objective.`
-
-			const response = await talkToBot(`${commandPrompt}`, messageHistory, apiConfig, objectiveMaker)
-			//console.log({ response })
-			objective = response.arguments.objective
-			console.log({ objectiveObject: response.arguments })
-			objectiveStatement = `\n\nThe assistant has this current objective:\n\n--- BEGIN CURRENT OBJECTIVE ---\n\n${objective}\n\n--- END CURRENT OBJECTIVE ---\n\n`
-			return objective
+			}).join('\n');
 		}
-		async function planningAgent(previousPlan = "", feedback = "") {
-			const planMaker = [
-				{
-					type: "function",
-					function: {
-						name: "Create_Plan",
-						description: "Executes a step-by-step plan to achieve a given objective. This function is given a series of actionable steps, each with specific instructions, based on the identified objective.",
-						parameters: {
-							type: "object",
-							properties: {
-								plan: {
-									type: "array",
-									items: {
-										type: "object",
-										properties: {
-											stepNumber: {
-												type: "integer",
-												description: "The sequential number of the step in the plan."
-											},
-											tool: {
-												type: 'string',
-												enum: toolBoxNames,
-												description: 'Name of the tool used to accomplish the task'
-											},
-											instructions: {
-												type: "string",
-												description: "Guidance for executing this specific step, outlining the approach but not the actual content."
-											},
-											content: {
-												type: "string",
-												description: "The actual content to be used or communicated in this step, separate from the execution instructions."
-											},
+		const showClientThoughtProcess = (thoughtProcess) => {
+			const thoughtProcessString = convertThoughtProcessLogToString(thoughtProcess)
+			this.socket.emit("progressMessage", { message: thoughtProcessString })
+		}
 
-										},
-										required: ["stepNumber", "instructions", "tool", "content"]
+		async function referenceFunctions() {
+			async function objectiveAgent(previousObjective = "", feedback = "") {
+				const objectiveMaker = [
+					{
+						type: "function",
+						function: {
+							name: "Determine_Objective",
+							description: "Provides an objective for the AI assistant's next response to the user. The objective should be about 3 sentences.",
+							parameters: {
+								type: "object",
+								properties: {
+									objective: {
+										type: "string",
+										description: "The objective for the AI assistant's next response.",
 									},
-									description: "An array of steps, each an object with a step number, corresponding instructions, and content."
-								}
-							},
-							required: ["plan"]
-						}
-					}
-				}
-			]
-
-
-			//console.log({ userInstructions })
-			let isPlanValid = false;
-
-			let attempts = 0
-			while (isPlanValid === false) {
-				// If previousPlan is not empty, format it for the command prompt
-				if (previousPlan) {
-					let oldPlanString = ``;
-					previousPlan.forEach(step => {
-						oldPlanString += `Step ${step.stepNumber}: ${step.instructions}\nTool to use: ${step.tool}\nResult: ${step.result}\n\n`;
-					});
-					previousPlan = `\n\nThe previous plan has been given for additional context:\n\n--- BEGIN PREVIOUS PLAN ---\n\n${oldPlanString}\n\n--- END PREVIOUS PLAN ---\n\n`;
-				}
-
-				// If there's feedback, format it for the command prompt
-				if (feedback) {
-					feedback = `\n\nA separate AI agent designed to provide assistance has the current feedback for creating the new objective: "${feedback} Avoid repeating the same action or question as before unless necessary."\n\n`;
-				}
-
-				// Construct the command prompt
-				const commandPrompt = `You are part of a decision-making system. Your goal is to examine the conversation and provide a plan for an AI assistant's next response to it's user. Consider if the content or context requires user interaction and plan accordingly. ${previousPlan}${feedback}${userInstructions}${objectiveStatement}${toolStatement}\n\nThe new plan should end with the assistant talking to the user, and may include steps requiring user responses.`
-
-				// Talk to the bot and get the response
-				const response = await talkToBot(`${commandPrompt}`, messageHistory, apiConfig, planMaker);
-				plan = response.arguments.plan;
-
-				// Check if the last step is 'talk'
-				const lastStep = plan[plan.length - 1];
-				if (lastStep.tool === "talk") {
-					attempts += 1
-					isPlanValid = true;
-					console.log({ attempts }, `Plan ends with "talk", good to go!`);
-				} else {
-					attempts += 1
-					feedback = "The last step didn't end with the talk action. Ensure the final action in the plan is 'talk'.";
-					previousPlan = plan
-					console.log({ attempts }, `Trying again....`)
-				}
-			}
-
-			plan = plan.map(step => {
-				step.result = "Step not completed yet."
-				return step
-			})
-			console.log({ "Plan per agent": plan })
-			let planString = ``
-			plan.forEach(step => {
-				planString += `Step ${step.stepNumber}: ${step.instructions}\nTool to use: ${step.tool}\nResult: ${step.result}\n\n`
-			})
-			//console.log({ planString })
-			planStatement = `\n\nThe assistant has created the following plan:\n\n--- BEGIN CURRENT PLAN ---\n\n${planString}\n\n--- END CURRENT PLAN ---\n\n`
-			return plan
-		}
-
-		async function sortSteps() {
-			const uncompletedSteps = plan.filter(step => step.result === "Step not completed yet.")
-			const completedSteps = plan.filter(step => step.result !== "Step not completed yet.")
-			return { uncompletedSteps, completedSteps }
-		}
-		async function handleDecision(decisionObject) {
-			const decision = decisionObject.arguments
-			// decision.decsion ["edit_steps", "change_objective"] & decision.reasoning
-			console.log({ decision })
-			if (decision.decision === "edit_steps") {
-				console.log("CHANGING PLAN")
-				await planningAgent(plan, decision.reasoning)
-			}
-			if (decision.decision === "changeObjective") {
-				console.log("CHANGING OBJECTIVE")
-				await objectiveAgent(objective, decision.reasoning)
-			}
-		}
-		async function takeNextSteps() {
-			//console.log("takeNextSteps() -> plan:", { plan })
-			let finalInstructions = null
-
-			console.log("STARTING LOOP")
-			while (!finalInstructions) {
-				const { completedSteps, uncompletedSteps } = await sortSteps()
-				console.log({ completedSteps }, { uncompletedSteps })
-				let progressString = ``
-				plan.forEach(step => {
-					progressString += `Step ${step.stepNumber}: ${step.instructions}\nTool to use: ${step.tool}\nResult: ${step.result}\n\n`
-				})
-				//console.log({ progressString })
-				let progressStatement = `The assistant has made the current progress towards the objective:\n\n--- BEGIN CURRENT PROGRESS ---\n\n${progressString}\n\n--- END CURRENT PROGRESS\n\n`
-
-
-				// continue loop if there's uncompleted steps
-				if (uncompletedSteps.length > 0) {
-					const nextStep = uncompletedSteps[0]
-					//console.log({ nextStep })
-					if (nextStep.tool === "talk") {
-						
-						async function talkingAgent(talkStep) {
-							const talkingAgentTool = [{
-								type: "function",
-								function: {
-									name: "Process_Talk_Interaction",
-									description: "Breaks down talk actions into interactive dialogue steps. It creates a sequence of 'talk' and 'waitForResponse' actions based on the provided content and instructions.",
-									parameters: {
-										type: "object",
-										properties: {
-											dialogueSteps: {
-												type: "array",
-												items: {
-													type: "object",
-													properties: {
-														tool: {
-															type: "string",
-															enum: ["talk", "waitForResponse"],
-															description: "Specifies the type of action, either 'talk' to deliver content or 'waitForResponse' to await user input."
-														},
-														instructions: {
-															type: "string",
-															description: "Guidance for executing this specific step."
-														},
-														content: {
-															type: "string",
-															description: "The actual content to be used or communicated in this step for 'talk' actions."
-														}
-													},
-													required: ["tool", "instructions"]
-												},
-												description: "An array of dialogue steps, each detailing a specific action in the interaction process."
-											}
-										},
-										required: ["dialogueSteps"]
-									}
-								}
-							}]
-
-							const command = `You are part of an interactive dialogue system. Your task is to process talk actions and create a detailed sequence of steps for an engaging conversation with the user. Analyze the provided talk instructions and content to determine the best way to structure the interaction. Break down the content into separate parts if necessary, and decide when to include 'waitForResponse' steps for user interaction. Use your understanding of conversational dynamics to create a natural and engaging dialogue flow.\n\nOriginal Talk Instructions: ${talkStep.instructions}\n\nOriginal Talk Content: ${talkStep.content}\n\nBased on these inputs, create a sequence of dialogue steps that ensures a coherent and interactive exchange with the user. The output should be an array of dialogue steps, including both 'talk' and 'waitForResponse' actions as needed.`
-
-							const response = await talkToBot(command, [], apiConfig, talkingAgentTool)
-							console.log({"Talking agent steps:": response.arguments.dialogueSteps})
-
-
-						}
-						await talkingAgent(nextStep)
-
-						finalInstructions = nextStep.instructions
-						break
-					}
-
-					const actionTaker = {
-						get_joke_text: async () => {
-							plan[nextStep.stepNumber - 1].result = `Joke: {Setup: "What do you call fake spagetti?", Punchline: "Impasta!"}\nSpecial Instructions: Tell the setup first, then the punchline AFTER the user responds`
-						},
-
-					};
-
-					const actionExists = actionTaker[nextStep.tool];
-					if (actionExists) {
-						actionExists();
-					}
-					else {
-						finalInstructions = `Inform the user that your inner thought process wants you to use the "${nextStep.tool}" tool, but you don't see it on the list of available actions.`;
-					} // catches undefined functions
-				}
-
-				// all the steps are done, but no there's no talk action to break the loop	
-				else {
-					// error catch if there's no completed steps
-					if (completedSteps.length === 0) {
-						finalInstructions = "Inform the user that something went wrong and you completly lost your train of thought. Ask if you guys can pick up from where you left off. Include a relevant emoji."
-						break
-					}
-
-					// all steps are done, and there wasn't a talk action
-					else {
-						finalInstructions = "Inform the user that the something went wrong and you never actually got instructions to respond."
-						break
-					}
-				}
-			}
-			console.log("ENDED LOOP")
-			return finalInstructions
-		}
-		async function criticAgent() {
-			const criticMaker = [
-				{
-					type: "function",
-					function: {
-						name: "evaluateProgress",
-						description: "Assesses the current conversation state, including the objective and plan, and decides the next course of action. Provides reasoning for the decision.",
-						parameters: {
-							type: "object",
-							properties: {
-								decision: {
-									type: "string",
-									enum: ["edit_steps", "change_objective"],
-									description: "Decision on the plan's progression: 'edit_steps' - Modify the current plan, applicable when user input partially aligns and necessitates adjustments, like responding to new queries or gathering more information. 'change_objective' - Alter the objective, relevant when the user's latest input significantly changes the conversation's direction, such as shifting from a casual chat to addressing a specific query."
+									reasoning: {
+										type: "string",
+										description: "The reasoning behind the objective",
+									},
 								},
-								reasoning: {
-									type: "string",
-									description: "Explanation for the chosen decision, based on the latest user input and the conversation context. Should include what needs be be changed."
-								}
+								required: ["objective", "reasoning"],
 							},
-							required: ["decision", "reasoning"]
+						},
+					}
+				]
+				//console.log({ userInstructions })
+				if (previousObjective) {
+					previousObjective = `\n\nThe previous objective has be given for addtional context:\n\n--- BEGIN LAST OBJECTIVE ---\n\n${previousObjective}\n\n--- END LAST OBJECTUVE ---\n\n`
+				}
+				if (feedback) {
+					feedback = `\n\nA seperate ai agent designed to provide assistance has the current feedback for creating the new objective: "${feedback}"\n\n`
+				}
+				const commandPrompt = `You are part of a decision making system. Your goal is to examine the conversation and provide an objective for the AI assistant's next response to the user. The objective should be about 3 sentences.${userInstructions}${previousObjective}${feedback}\n\nMake sure to follow the instructions given by the user when making the new objective.`
+
+				const response = await agentCore(`${commandPrompt}`, messageHistory, apiConfig, objectiveMaker)
+				//console.log({ response })
+				objective = response.arguments.objective
+				//console.log({ objectiveObject: response.arguments })
+				objectiveStatement = `\n\nThe assistant has this current objective:\n\n--- BEGIN CURRENT OBJECTIVE ---\n\n${objective}\n\n--- END CURRENT OBJECTIVE ---\n\n`
+				return objective
+			}
+			async function planningAgent(previousPlan = "", feedback = "") {
+				const planMaker = [
+					{
+						type: "function",
+						function: {
+							name: "Create_Plan",
+							description: "Executes a step-by-step plan to achieve a given objective. This function is given a series of actionable steps, each with specific instructions, based on the identified objective.",
+							parameters: {
+								type: "object",
+								properties: {
+									plan: {
+										type: "array",
+										items: {
+											type: "object",
+											properties: {
+												stepNumber: {
+													type: "integer",
+													description: "The sequential number of the step in the plan."
+												},
+												tool: {
+													type: 'string',
+													enum: toolBoxNames,
+													description: 'Name of the tool used to accomplish the task'
+												},
+												instructions: {
+													type: "string",
+													description: "Guidance for executing this specific step, outlining the approach but not the actual content."
+												},
+												content: {
+													type: "string",
+													description: "The actual content to be used or communicated in this step, separate from the execution instructions."
+												},
+
+											},
+											required: ["stepNumber", "instructions", "tool", "content"]
+										},
+										description: "An array of steps, each an object with a step number, corresponding instructions, and content."
+									}
+								},
+								required: ["plan"]
+							}
 						}
 					}
+				]
+
+
+				//console.log({ userInstructions })
+				let isPlanValid = false;
+
+				let attempts = 0
+				while (isPlanValid === false) {
+					// If previousPlan is not empty, format it for the command prompt
+					if (previousPlan) {
+						let oldPlanString = ``;
+						previousPlan.forEach(step => {
+							oldPlanString += `Step ${step.stepNumber}: ${step.instructions}\nTool to use: ${step.tool}\nResult: ${step.result}\n\n`;
+						});
+						previousPlan = `\n\nThe previous plan has been given for additional context:\n\n--- BEGIN PREVIOUS PLAN ---\n\n${oldPlanString}\n\n--- END PREVIOUS PLAN ---\n\n`;
+					}
+
+					// If there's feedback, format it for the command prompt
+					if (feedback) {
+						feedback = `\n\nA separate AI agent designed to provide assistance has the current feedback for creating the new objective: "${feedback} Avoid repeating the same action or question as before unless necessary."\n\n`;
+					}
+
+					// Construct the command prompt
+					const commandPrompt = `You are part of a decision-making system. Your goal is to examine the conversation and provide a plan for an AI assistant's next response to it's user. Consider if the content or context requires user interaction and plan accordingly. ${previousPlan}${feedback}${userInstructions}${objectiveStatement}${toolsAvailable}\n\nThe new plan should end with the assistant talking to the user, and may include steps requiring user responses.`
+
+					// Talk to the bot and get the response
+					const response = await agentCore(`${commandPrompt}`, messageHistory, apiConfig, planMaker);
+					plan = response.arguments.plan;
+
+					// Check if the last step is 'talk'
+					const lastStep = plan[plan.length - 1];
+					if (lastStep.tool === "talk") {
+						attempts += 1
+						isPlanValid = true;
+						console.log({ attempts }, `Plan ends with "talk", good to go!`);
+					} else {
+						attempts += 1
+						feedback = "The last step didn't end with the talk action. Ensure the final action in the plan is 'talk'.";
+						previousPlan = plan
+						console.log({ attempts }, `Trying again....`)
+					}
 				}
+
+				plan = plan.map(step => {
+					step.result = "Step not completed yet."
+					return step
+				})
+				//console.log({ "Plan per agent": plan })
+				let planString = ``
+				plan.forEach(step => {
+					planString += `Step ${step.stepNumber}: ${step.instructions}\nTool to use: ${step.tool}\nResult: ${step.result}\n\n`
+				})
+				//console.log({ planString })
+				planStatement = `\n\nThe assistant has created the following plan:\n\n--- BEGIN CURRENT PLAN ---\n\n${planString}\n\n--- END CURRENT PLAN ---\n\n`
+				return plan
+			}
+		}
+
+		let placeholder = null
+		async function thinkingAgent(thoughtProcess) {
+			const thinkingTool = [{
+				"type": "function",
+				"function": {
+					"name": "Determine_Next_Step",
+					"description": "Decides what the AI assistant needs to do next to progress towards answering the user's query.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"latestObservation": {
+								"type": "string",
+								"description": "The most recent observation or result from the last action."
+							},
+							"nextThought": {
+								"type": "string",
+								"description": "The next logical thought or step in the process."
+							}
+						},
+						"required": ["latestObservation", "nextThought"]
+					}
+				}
+			}
 			]
-			const commandPrompt = `You are part of a decision making system. Your goal is to review the current objective and the steps of the plan that have been executed so far. Considering the latest user input, decide how to modify the plan, or if the objective should be changed entirely.\n\n ${userInstructions}\n\n${toolStatement}\n\n${objectiveStatement}\n\n${planStatement}`
-			//console.log({ commandPrompt })
-			const criticDecision = await talkToBot(`${commandPrompt}`, messageHistory, apiConfig, criticMaker)
-			//console.log({ criticDecision })
-			return criticDecision
+			const agentRoleThinking = "analyze the current situation and determine the next logical step in the assistant's response process. As the Thinking Agent, utilize the Thought Process Log, the available tools, and the user instructions to guide your decisions and contribute effectively to the assistant's response.";
+			const instructions = await getAgentInstructions(agentRoleThinking, thoughtProcess)
+			const thinkingResponse = await agentCore(instructions, messageHistory, apiConfig, thinkingTool)
+			console.log({ "Thinking agent response": thinkingResponse.arguments })
+			const thought = { thought: thinkingResponse.arguments.nextThought }
+			return thought
+		}
+		async function actingAgent(thoughtProcess) {
+			const actingTool = [{
+				"type": "function",
+				"function": {
+					"name": "Execute_Action",
+					"description": "Performs the action decided by the Thinking Agent.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"action": {
+								"type": "string",
+								"description": "The action to be executed."
+							},
+							"input": {
+								"type": "string",
+								"description": "The input required for the action."
+							}
+						},
+						"required": ["action", "input"]
+					}
+				}
+			}
+			]
+			const agentRoleActing = "execute the action determined by the Thinking Agent, utilizing the appropriate tool. As the Acting Agent, use the information from the Thought Process Log and user instructions to perform actions that progress the system's response to the user's query.";
+			const instructions = await getAgentInstructions(agentRoleActing, thoughtProcess)
+			const actingResponse = await agentCore(instructions, messageHistory, apiConfig, actingTool)
+			console.log({ "Acting agent response": actingResponse.arguments })
+			const action = { action: `[${actingResponse.arguments.action}] "${actingResponse.arguments.input}"` }
+			return action
+
+		}
+		async function observingAgent(thoughtProcess) {
+			const observingTool = [{
+				"type": "function",
+				"function": {
+					"name": "Record_Observation",
+					"description": "Logs the result of the executed action.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"actionResult": {
+								"type": "string",
+								"description": "The outcome or result of the action taken."
+							},
+							"observation": {
+								"type": "string",
+								"description": "The observation to be recorded in the Thought Process Log."
+							}
+						},
+						"required": ["actionResult", "observation"]
+					}
+				}
+			}
+			]
+			const agentRoleObserving = "observe and record the outcome of the action taken, adding this information to the Thought Process Log. As the Observing Agent, your observations are key to informing future actions and thoughts within the system.";
+			const instructions = await getAgentInstructions(agentRoleObserving, thoughtProcess)
+			const observingResponse = await agentCore(instructions, messageHistory, apiConfig, observingTool)
+			console.log({ "Observing agent response": observingResponse.arguments })
+			const observation = { observation: observingResponse.arguments.observation }
+			return observation
+		}
+		async function respondingAgent(thoughtProcess) {
+			const respondingTool = [{
+				"type": "function",
+				"function": {
+					"name": "Formulate_Response",
+					"description": "Creates a final response based on the Thought Process Log.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"thoughtProcessLog": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"thought": { "type": "string" },
+										"action": { "type": "string" },
+										"observation": { "type": "string" }
+									}
+								},
+								"description": "The complete log of thoughts, actions, and observations."
+							},
+							"finalResponse": {
+								"type": "string",
+								"description": "The final response to be communicated to the user."
+							}
+						},
+						"required": ["thoughtProcessLog", "finalResponse"]
+					}
+				}
+			}
+			]
+			const agentRoleResponding = "review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations.";
+			const instructions = await getAgentInstructions(agentRoleResponding, thoughtProcess)
+			const streamConfig = { ...apiConfig, streamResponse: true }
+			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, respondingTool)
+			console.log({ respondingResponse })
+			return respondingResponse
+			//console.log({"Responding agent response": respondingResponse.arguments})
+			//const response = {response: respondingResponse.arguments.finalResponse}
+			//return response
 		}
 
-		if (messageHistory.length === 0) {
-			await createFirstThoughtProcess()
+
+		async function createFirstObservation(messageHistory, lastMessage) {
+			if (messageHistory.length === 0) {
+				return [{ observation: "The conversation has just started. The assistant should greet the user." }];
+			} else {
+				const content = lastMessage.content
+				return [{ observation: `The user replied: "${content}"` }];
+			}
 		}
-		else {
-			const decision = await criticAgent()
-			await handleDecision(decision)
+
+
+		async function thinkActObserve() {
+			let thoughtProcess = await createFirstObservation() // array of objects
+			//thoughtProcess = [{thought: "string"}, {action: "string"}, {observation: "string"}]
+			let loopCounter = 0
+
+			while (loopCounter < 6) {
+				loopCounter += 1
+				thoughtProcess.push(await thinkingAgent(thoughtProcess))
+				thoughtProcess.push(await actingAgent(thoughtProcess))
+				const agentsLastAction = placeholder
+				if (agentsLastAction === "finish") {
+					break
+				}
+				thoughtProcess.push(await observingAgent(thoughtProcess))
+			}
+			return thoughtProcess
 		}
 
-		let finalInstructions = await takeNextSteps()
-		if (!finalInstructions) {
-			finalInstructions = "Inform the user that the something went wrong and the final instructions were not given"
+		async function testing123abc() {
+			let thoughtProcess = await createFirstObservation(messageHistory, lastUserMessage)
+			showClientThoughtProcess(thoughtProcess)
+			thoughtProcess.push(await thinkingAgent(thoughtProcess))
+			showClientThoughtProcess(thoughtProcess)
+			thoughtProcess.push(await actingAgent(thoughtProcess))
+			showClientThoughtProcess(thoughtProcess)
+			thoughtProcess.push(await observingAgent(thoughtProcess))
+			showClientThoughtProcess(thoughtProcess)
+			console.log({ thoughtProcess })
+			return thoughtProcess
 		}
-		console.log({ finalInstructions })
+
+		const finalThoughtProcess = await testing123abc()
+		const stream = await respondingAgent(finalThoughtProcess)
+		return stream
 
 
-		apiOptions.messages = []
-		apiOptions.messages.push({ role: "assistant", content: finalInstructions })
+
+		//let finalThoughtProcess = await thinkActObserve()	
+		//let finalResponseStream = await respondingAgent(finalThoughtProcess)
+		//return finalResponseStream
 
 
-		const updated_thoughtProcess = {
-			userInstructions, objective, objectiveStatement, plan, planStatement
-		}
-		//console.log({updated_thoughtProcess})
-		await this.updateThoughtProcess(updated_thoughtProcess)
-		const passThrough = await openai.chat.completions.create(apiOptions)
-		return passThrough
+		const tempPassThrough = await openai.chat.completions.create(apiOptions)
+		console.log({ tempPassThrough })
+		return tempPassThrough
 	}
 
 	async streamResponse(sentMessage, conversationOptions) {
@@ -1073,37 +1132,44 @@ export class Sidekick {
 		};
 
 		console.log("streamResponse() -> reasoningEngine()...")
+		console.log({"messages!!!": apiOptions.messages})
 		let response = await this.reasoningEngine(apiOptions)
 
-		const stream = OpenAIStream(response, {
-			onStart: async () => {
-				console.log('stream.onStart() -> Stream started');
-				if (sentMessage.role !== "system") {
-					await this.saveMessage(sentMessage, conversationOptions);
-				}
-			},
-			onToken: async token => {
-				//console.log("stream.onToken -> token:")
-				//console.log({ token });
-			},
-			onCompletion: async completion => {
-				//console.log('stream.onCompletion() -> Completion completed:', completion);
-				const botResponse = {
-					role: "assistant",
-					content: completion,
-					creationTimeId: sentMessage.responseMessageId,
-					tokenCount: openaiTokenCounter.text(completion, "gpt-3.5-turbo"),
-					messageCount: chatHistory.length,
-				};
-				//console.log("stream.onCompletion -> token count:", botResponse.tokenCount);
-				await this.saveMessage(botResponse, conversationOptions);
-			},
-			onFinal: async completion => {
-				//console.log("stream.onFinal() -> Stream completed:", completion);
-			},
-		});
+		try {
+			const stream = OpenAIStream(response, {
+				onStart: async () => {
+					console.log('stream.onStart() -> Stream started');
+					if (sentMessage.role !== "system") {
+						await this.saveMessage(sentMessage, conversationOptions);
+					}
+				},
+				onToken: async token => {
+					//console.log("stream.onToken -> token:")
+					//console.log({ token });
+				},
+				onCompletion: async completion => {
+					//console.log('stream.onCompletion() -> Completion completed:', completion);
+					const botResponse = {
+						role: "assistant",
+						content: completion,
+						creationTimeId: sentMessage.responseMessageId,
+						tokenCount: openaiTokenCounter.text(completion, "gpt-3.5-turbo"),
+						messageCount: chatHistory.length,
+					};
+					//console.log("stream.onCompletion -> token count:", botResponse.tokenCount);
+					await this.saveMessage(botResponse, conversationOptions);
+				},
+				onFinal: async completion => {
+					//console.log("stream.onFinal() -> Stream completed:", completion);
+				},
+			});
+		
 		console.log("streamResponse() -> END");
 		return stream;
+			} catch (error) {
+				consoole.log("ERROR :(")
+			return ":("
+			}
 	}
 
 	async fetchAudio() {
