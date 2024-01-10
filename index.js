@@ -9,6 +9,8 @@ import expressWs from 'express-ws';
 import { TextDecoder } from 'util';
 import { Server } from "socket.io";
 import * as natural from 'natural';
+import { parse } from 'best-effort-json-parser'
+
 
 const textDecoder = new TextDecoder('utf-8');
 const tokenizer = new natural.default.SentenceTokenizer();
@@ -115,6 +117,8 @@ io.on('connection', async (socket) => {
 		okayToSend: true, // [x]
 		groupNumber: 0 // [x]
 	};
+
+
 	function resetAudioState() {
 		audioState = {
 			pendingGroups: [],
@@ -176,6 +180,8 @@ io.on('connection', async (socket) => {
 		console.log('***CLIENT RESPONDED***');
 	});
 
+	
+
 
 	socket.on('ServerToServer', (msg) => {
 		console.log(`***Server responded to itself***`);
@@ -188,8 +194,7 @@ io.on('connection', async (socket) => {
 
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
-		console.log('socket.on(textRequest');
-		socket.emit("updateMessage", { message: "Requesting text..." })
+		console.log('socket.on(textRequest)');
 		resetAudioState()
 
 		const { location, sentMessage, conversationOptions } = data.payload;
@@ -198,15 +203,86 @@ io.on('connection', async (socket) => {
 
 		let sentenceBuffer = '';
 		const maxSentenceCount = voiceOptions.sentencesPerCall
-
-		const sidekickInstance = new Sidekick(location);
+		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+		console.log({ location }, { sentMessage }, { conversationOptions })
+		const sidekickInstance = new Sidekick(location, socket);
 		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
+		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 
+		let buffer = ''; // chunk location
+		let finalResponseChunks = [];// chunk location
+		let isFinalResponse = false; // chunk location
+		let chunkPosition = null
+		let previousFinalResponse = ''
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
+			//console.log({buffer})
 			const decodedTextChunk = textDecoder.decode(chunk)
-			const textChunk = decodedTextChunk.toString();
-			socket.emit(`textChunk`, { textChunk })
+			let textChunk = decodedTextChunk.toString();
+
+			/*
+			function removeSpecificString(textChunk, stringToRemove) {
+				return textChunk.replace(new RegExp(stringToRemove, 'g'), '');
+			}
+			textChunk = removeSpecificString(textChunk, "\\\\");
+			function shouldHandleChunk(textChunk) {
+				
+
+				// If "finalResponse" is found in the buffer, set the flag
+				if (buffer.includes('"finalResponse"')) {
+					isFinalResponse = true;
+				}
+
+				// If the buffer ends with "}", and we've already seen "finalResponse"
+				if (buffer.endsWith('}') && isFinalResponse) {
+					isFinalResponse = false; // Reset for next time
+					return false;
+				}
+
+				buffer += textChunk;
+				return isFinalResponse;
+			}
+			const result = shouldHandleChunk(textChunk)
+			let lastChunkResult = result
+			console.log({ textChunk, result })
+			*/
+
+			buffer += textChunk;
+			let jsonResponse = parse(buffer);
+			//console.log({jsonResponse})
+			let toolArguments = jsonResponse.tool_calls[0]?.function?.arguments;
+			//console.log({toolArguments})
+			
+
+			function getNewChunk(currentFinalResponse) {
+				// Determine the new chunk by comparing with the previous state
+				const newChunk = currentFinalResponse.slice(previousFinalResponse.length);
+				// Update the previous state
+				previousFinalResponse = currentFinalResponse;
+				return newChunk;
+			}
+
+			try {
+				let parsedArguments = parse(toolArguments);
+				//console.log({parsedArguments})
+				let currentFinalResponse = parsedArguments?.finalResponse;
+				//console.log({currentFinalResponse})
+				
+				// Get the new chunk
+				let newChunk = getNewChunk(currentFinalResponse);
+				//console.log({newChunk})
+				// Emit only if there is a new chunk
+				
+				if (newChunk) {
+					socket.emit(`textChunk`, { textChunk: newChunk });
+				}
+				
+			} catch (error) {
+				//console.log({ "parsedArguments": `${error}` });
+			}
+
+			//socket.emit(`textChunk`, { textChunk })
+
 
 			sentenceBuffer += textChunk;
 			const sentences = tokenizer.tokenize(sentenceBuffer);
@@ -241,7 +317,7 @@ io.on('connection', async (socket) => {
 
 	socket.on(`playMessage`, async (data) => {
 		console.log('socket.on(playMessage)');
-		socket.emit("updateMessage", { message: "Getting audio..." })
+		socket.emit("progressMessage", { message: "REQUESTING AUDIO" })
 		resetAudioState()
 		const sentMessageContent = data.payload
 		console.log({ sentMessageContent })
@@ -309,7 +385,7 @@ io.on('connection', async (socket) => {
 	socket.on(`getAPIKey`, async (data, callback) => {
 		console.log("/getAPIKey Websocket event")
 		try {
-			const serverSideAPIKey = process.env['whisperAPI']
+			const serverSideAPIKey = process.env['apiKeyV2']
 			console.log({ serverSideAPIKey })
 			console.log("/getAPIKey -> END")
 			callback({ success: true, data: serverSideAPIKey })
