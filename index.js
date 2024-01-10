@@ -195,7 +195,6 @@ io.on('connection', async (socket) => {
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
 		console.log('socket.on(textRequest)');
-		socket.emit("progressMessage", { message: "REQUESTING TEXT" })
 		resetAudioState()
 
 		const { location, sentMessage, conversationOptions } = data.payload;

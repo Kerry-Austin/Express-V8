@@ -18,6 +18,8 @@ import * as PlayHT from 'playht';
 import { jsonrepair } from 'jsonrepair'
 import fetch from 'node-fetch';
 import { Readable } from 'stream';
+import { parse } from 'best-effort-json-parser' // double import (from index.js)
+
 
 const backupApiKey = process.env['apiKey']
 console.log({ backupApiKey })
@@ -522,45 +524,116 @@ export class Sidekick {
 		console.log("************************************************************")
 		console.log("reasoningEngine()")
 		console.log("reasoningEngine() -> getThoughtProcess()...")
-		this.socket.emit("progressMessage", { message: "REASONING ENGINE!!!!" })
+		this.socket.emit("progressMesssage", { message: "Thinking..." })
 		//[] delete method from class
 		//let original_thoughtProcess = await this.getThoughtProcess()
 
 		let toolBox = [
-			// talk
+			// brainstorm
 			{
-				type: "function",
-				function: {
-					name: "talk",
-					description: "Asks the user a question to learn more about their wants and/or needs, or gives information to the user. ALL commuincation to the user is done with this function.",
-					parameters: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-								description: `The question, statement, or information the assitant should tell the user. It is an instruction for another AI agent and should be worded as such. For example, instead of, "How's your day going?" it should be "Ask the user how their day is going."`
-							},
+				"type": "function",
+				"function": {
+					"name": "Brainstorm",
+					"description": "Takes a list of ideas, suggestions, or potential actions for brainstorming.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"ideas": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "A list of ideas or suggestions."
+							}
 						},
-						required: ["message"],
-					},
-				},
-			},
-			// get_joke_text
-			/*
-			{
-				type: "function",
-				function: {
-					name: "get_joke_text",
-					description: "Retrieve a random joke's setup and punchline. Only use if a joke is asked for. The setup should be told first, then the punchline AFTER the user responds.",
-					parameters: {
-						type: "object",
-						properties: {},
-						required: []
+						"required": ["ideas"]
 					}
 				}
 			},
-			*/
-
+			// finish
+			{
+				type: "function",
+				function: {
+					name: "Finish",
+					description: "Indicates that the final response is ready and the process can be concluded.",
+					parameters: {
+						type: "object",
+						properties: {
+							finalResponse: {
+								type: "string",
+								description: "The final response or conclusion reached by the agent."
+							}
+						},
+						required: ["finalResponse"]
+					}
+				}
+			},
+			// summarize
+			{
+				"type": "function",
+				"function": {
+					"name": "Summarize",
+					"description": "Creates a concise summary of the provided text or information.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"text": {
+								"type": "string",
+								"description": "The text or information to be summarized."
+							},
+							"summary": {
+								"type": "string",
+								"description": "The concise summary of the provided text."
+							}
+						},
+						"required": ["text", "summary"]
+					}
+				}
+			},
+			// generate question
+			{
+				"type": "function",
+				"function": {
+					"name": "Generate_Question",
+					"description": "Generates relevant questions based on the given context or topic.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"context": {
+								"type": "string",
+								"description": "The context or topic for the question generation."
+							},
+							"question": {
+								"type": "string",
+								"description": "The generated question relevant to the context."
+							}
+						},
+						"required": ["context", "question"]
+					}
+				}
+			},
+			// validate
+			{
+				"type": "function",
+				"function": {
+					"name": "Validate_Fact",
+					"description": "Validates the accuracy of a given statement or fact.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"statement": {
+								"type": "string",
+								"description": "The statement or fact to be validated."
+							},
+							"validity": {
+								"type": "string",
+								"description": "The assessment of the statement's validity."
+							}
+						},
+						"required": ["statement", "validity"]
+					}
+				}
+			}
 		];
 		//toolBox = []
 		const toolBoxNames = toolBox.map(object => object.function.name);
@@ -695,7 +768,7 @@ export class Sidekick {
 			}
 		}
 		async function getAgentInstructions(agentRole, thoughtProcessLog) {
-			
+
 			const thoughtProcessLogString = convertThoughtProcessLogToString(thoughtProcessLog)
 			const agentInstructions = {
 				instructions:
@@ -729,16 +802,17 @@ export class Sidekick {
 		function convertThoughtProcessLogToString(thoughtProcessLog) {
 			return thoughtProcessLog.map(item => {
 				if (item.thought) {
-					return `Thought: ${item.thought}`;
+					return `<strong>Thought:</strong><p>${item.thought}</p>`;
 				} else if (item.action) {
-					return `Action: ${item.action}`;
+					return `<strong>Action:</strong><p>${item.action}</p>`;
 				} else if (item.observation) {
-					return `Observation: ${item.observation}`;
+					return `<strong>Observation:</strong><p>${item.observation}</p>`;
 				}
 			}).join('\n');
 		}
 		const showClientThoughtProcess = (thoughtProcess) => {
 			const thoughtProcessString = convertThoughtProcessLogToString(thoughtProcess)
+			console.log({ thoughtProcessString })
 			this.socket.emit("progressMessage", { message: thoughtProcessString })
 		}
 
@@ -925,8 +999,9 @@ export class Sidekick {
 						"type": "object",
 						"properties": {
 							"action": {
-								"type": "string",
-								"description": "The action to be executed."
+								"type": 'string',
+								"enum": toolBoxNames,
+								"description": 'Name of the tool used to accomplish the task'
 							},
 							"input": {
 								"type": "string",
@@ -1054,8 +1129,9 @@ export class Sidekick {
 			showClientThoughtProcess(thoughtProcess)
 			thoughtProcess.push(await actingAgent(thoughtProcess))
 			showClientThoughtProcess(thoughtProcess)
-			thoughtProcess.push(await observingAgent(thoughtProcess))
-			showClientThoughtProcess(thoughtProcess)
+			// observation only for internal actions, not used for testing
+			//thoughtProcess.push(await observingAgent(thoughtProcess))
+			//showClientThoughtProcess(thoughtProcess)
 			console.log({ thoughtProcess })
 			return thoughtProcess
 		}
@@ -1132,7 +1208,7 @@ export class Sidekick {
 		};
 
 		console.log("streamResponse() -> reasoningEngine()...")
-		console.log({"messages!!!": apiOptions.messages})
+		console.log({ "messages!!!": apiOptions.messages })
 		let response = await this.reasoningEngine(apiOptions)
 
 		try {
@@ -1149,7 +1225,7 @@ export class Sidekick {
 				},
 				onCompletion: async completion => {
 					//console.log('stream.onCompletion() -> Completion completed:', completion);
-					const botResponse = {
+					let botResponse = {
 						role: "assistant",
 						content: completion,
 						creationTimeId: sentMessage.responseMessageId,
@@ -1157,19 +1233,27 @@ export class Sidekick {
 						messageCount: chatHistory.length,
 					};
 					//console.log("stream.onCompletion -> token count:", botResponse.tokenCount);
+
+					//this.socket.emit("progressMessage", { message: "" })
+					let functionResult = parse(botResponse.content)
+					functionResult = functionResult.tool_calls[0].function.arguments
+					functionResult = JSON.parse(functionResult)
+					console.log({ "CALLBACK": functionResult })
+
+					botResponse.content = functionResult.finalResponse
 					await this.saveMessage(botResponse, conversationOptions);
 				},
 				onFinal: async completion => {
 					//console.log("stream.onFinal() -> Stream completed:", completion);
 				},
 			});
-		
-		console.log("streamResponse() -> END");
-		return stream;
-			} catch (error) {
-				consoole.log("ERROR :(")
+
+			console.log("streamResponse() -> END");
+			return stream;
+		} catch (error) {
+			consoole.log("ERROR :(")
 			return ":("
-			}
+		}
 	}
 
 	async fetchAudio() {
