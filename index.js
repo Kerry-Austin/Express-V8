@@ -9,6 +9,7 @@ import expressWs from 'express-ws';
 import { TextDecoder } from 'util';
 import { Server } from "socket.io";
 import * as natural from 'natural';
+import nlp from 'compromise'
 import { parse } from 'best-effort-json-parser'
 
 
@@ -25,7 +26,7 @@ Todo List
 PlayHT.init({
 	apiKey: '2111d113542d43298034d49903ed9334',
 	userId: 'hfF1DKXkMNXhQfOx24NnrLq178C2',
-	defaultVoiceId: 's3://voice-cloning-zero-shot/028a32d4-6a79-4ca3-a303-d6559843114b/chris/manifest.json',
+	defaultVoiceId: 's3://voice-cloning-zero-shot/7c339a9d-370f-4643-adf5-4134e3ec9886/mlae02/manifest.json',
 	defaultVoiceEngine: 'PlayHT2.0',
 });
 
@@ -34,8 +35,8 @@ const voiceOptions = {
 		quality: 'draft',
 		temperature: 0.1,
 	},
-	sentencesPerCall: 1,
-	KbPerChunk: 64
+	sentencesPerCall: 1, // was 1
+	KbPerChunk: 64 // was 64
 }
 const apiOptions = voiceOptions.apiOptions
 
@@ -195,6 +196,9 @@ io.on('connection', async (socket) => {
 	// 1. Socket Event Listener
 	socket.on('textRequest', async (data) => {
 		console.log('socket.on(textRequest)');
+			socket.emit("progressMessage", { message: ""})
+
+
 		resetAudioState()
 
 		const { location, sentMessage, conversationOptions } = data.payload;
@@ -262,6 +266,7 @@ io.on('connection', async (socket) => {
 				return newChunk;
 			}
 
+			let actualTextchunk = ""
 			try {
 				let parsedArguments = parse(toolArguments);
 				//console.log({parsedArguments})
@@ -275,6 +280,7 @@ io.on('connection', async (socket) => {
 				
 				if (newChunk) {
 					socket.emit(`textChunk`, { textChunk: newChunk });
+					actualTextchunk = newChunk
 				}
 				
 			} catch (error) {
@@ -284,7 +290,7 @@ io.on('connection', async (socket) => {
 			//socket.emit(`textChunk`, { textChunk })
 
 
-			sentenceBuffer += textChunk;
+			sentenceBuffer += actualTextchunk;
 			const sentences = tokenizer.tokenize(sentenceBuffer);
 
 			while (sentences.length > maxSentenceCount) {
@@ -353,14 +359,22 @@ io.on('connection', async (socket) => {
 			return chunks;
 		};
 
-		const streamingText = textToChunksBySentences(sentMessageContent, maxSentenceCount);
+		let doc = nlp(sentMessageContent)
+		console.log({"doc.json": doc.json()})
+		
+		let streamingText = textToChunksBySentences(sentMessageContent, maxSentenceCount);
+		console.log({streamingText})
+		streamingText = doc.json().map(item => item.text)
+		console.log({"NEW streamingText": streamingText})
 
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
 			const textChunk = chunk.toString();
 			sentenceBuffer += textChunk;
+			console.log({sentenceBuffer})
 
 			const sentences = tokenizer.tokenize(sentenceBuffer);
+			console.log({sentences})
 			while (sentences.length >= maxSentenceCount) {
 				const sentenceSubset = sentences.splice(0, maxSentenceCount).join(' ');
 
@@ -385,7 +399,7 @@ io.on('connection', async (socket) => {
 	socket.on(`getAPIKey`, async (data, callback) => {
 		console.log("/getAPIKey Websocket event")
 		try {
-			const serverSideAPIKey = process.env['apiKeyV2']
+			const serverSideAPIKey = process.env['apiKey']
 			console.log({ serverSideAPIKey })
 			console.log("/getAPIKey -> END")
 			callback({ success: true, data: serverSideAPIKey })

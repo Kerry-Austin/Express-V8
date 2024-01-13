@@ -21,10 +21,10 @@ import { Readable } from 'stream';
 import { parse } from 'best-effort-json-parser' // double import (from index.js)
 
 
-const backupApiKey = process.env['apiKey']
-console.log({ backupApiKey })
+const expressApiKey = process.env['apiKey']
+console.log({ expressApiKey })
 const openai_BACKUP = new OpenAI({
-	apiKey: backupApiKey,
+	apiKey: expressApiKey,
 });
 const modelToUse = "gpt-3.5-turbo"
 // openAI = gpt-3.5-turbo || gpt-4-1106-preview
@@ -44,7 +44,7 @@ openai = openai_BACKUP
 
 function makeNewClient() {
 	return new OpenAI({
-		apiKey: backupApiKey,
+		apiKey: expressApiKey,
 	});
 }
 
@@ -384,6 +384,7 @@ export class Sidekick {
 	async saveMessage(sentMessage, conversationOptions) {
 		console.log("saveMessage()");
 		const conversationRef = doc(this.conversationsRef, this.conversationId);
+		console.log("saveMessage() -> ", { sentMessage })
 
 		const { systemMessage, staticMemory } = conversationOptions;
 		const updateData = {
@@ -521,36 +522,40 @@ export class Sidekick {
 	}
 
 	async reasoningEngine(apiOptions) {
+		const clearProgressMessage = () => {
+			this.socket.emit("progressMessage", { message: "" })
+		}
 		console.log("************************************************************")
 		console.log("reasoningEngine()")
 		console.log("reasoningEngine() -> getThoughtProcess()...")
-		this.socket.emit("progressMesssage", { message: "Thinking..." })
 		//[] delete method from class
 		//let original_thoughtProcess = await this.getThoughtProcess()
 
 		let toolBox = [
-			// brainstorm
+			// Brainstorm
+			/*
 			{
 				"type": "function",
 				"function": {
 					"name": "Brainstorm",
-					"description": "Takes a list of ideas, suggestions, or potential actions for brainstorming.",
+					"description": "Generates a list of ideas, suggestions, or potential actions.",
 					"parameters": {
 						"type": "object",
 						"properties": {
-							"ideas": {
+							"topics": {
 								"type": "array",
 								"items": {
 									"type": "string"
 								},
-								"description": "A list of ideas or suggestions."
+								"description": "A list of topics or suggestions to brainstorm about."
 							}
 						},
 						"required": ["ideas"]
 					}
 				}
 			},
-			// finish
+			*/
+			// Finish
 			{
 				type: "function",
 				function: {
@@ -568,7 +573,8 @@ export class Sidekick {
 					}
 				}
 			},
-			// summarize
+			/*
+			// Summarize
 			{
 				"type": "function",
 				"function": {
@@ -590,7 +596,7 @@ export class Sidekick {
 					}
 				}
 			},
-			// generate question
+			// Generate_Question
 			{
 				"type": "function",
 				"function": {
@@ -612,7 +618,7 @@ export class Sidekick {
 					}
 				}
 			},
-			// validate
+			// Validate
 			{
 				"type": "function",
 				"function": {
@@ -634,7 +640,8 @@ export class Sidekick {
 					}
 				}
 			}
-		];
+			*/
+		]
 		//toolBox = []
 		const toolBoxNames = toolBox.map(object => object.function.name);
 		// array -> eg ["calculator", "get_weather", "google_search"]
@@ -674,16 +681,24 @@ export class Sidekick {
 
 
 		// Functions
-		async function agentCore(instructions = "", messageHistory = [], apiConfig, tools = []) {
+		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
+			let historyCopy = JSON.parse(JSON.stringify(providedHistory));
 			const { model } = apiConfig
-			if (tools.length === 0) {
+			if (tools.length === 0 || !tools) {
 				console.log("agentCore() -> tools.length = 0")
 				if (instructions) {
 					const command = { role: "system", content: instructions }
-					messageHistory.push(command)
+					historyCopy.push(command)
+				}
+				if (apiConfig.jsonMode === true){
+					const completion = await openai.chat.completions.create({
+						messages: historyCopy,
+						model: model,
+						response_format: { "type": "json_object" }
+					});
 				}
 				const completion = await openai.chat.completions.create({
-					messages: messageHistory,
+					messages: historyCopy,
 					model: model,
 				});
 				const botMessage = completion.choices[0].message
@@ -695,11 +710,11 @@ export class Sidekick {
 				//console.log(`TOOL: ${tools[0].function.name}`)
 				if (instructions) {
 					const command = { role: "system", content: instructions }
-					messageHistory.push(command)
+					historyCopy.push(command)
 				}
 				if (apiConfig.streamResponse === true) {
 					const stream = await openai.chat.completions.create({
-						messages: messageHistory,
+						messages: historyCopy,
 						model: model,
 						tools: tools,
 						stream: true,
@@ -708,7 +723,7 @@ export class Sidekick {
 					return stream
 				}
 				const completion = await openai.chat.completions.create({
-					messages: messageHistory,
+					messages: historyCopy,
 					model: model,
 					tools: tools,
 					tool_choice: { type: "function", function: { name: `${tools[0].function.name}` } },
@@ -718,13 +733,14 @@ export class Sidekick {
 				const action = {}
 				action.name = functionCall.name
 				action.arguments = JSON.parse(jsonrepair(functionCall.arguments))
+				action.toolId = completion.choices[0].message.tool_calls[0].id
 				//console.log({ action })
 				return action
 			}
 			if (tools.length > 1) {
 				console.log("agentCore() -> tools.length > 1")
 				const command = { role: "system", content: instructions }
-				const messageHistory_copy = [command, ...messageHistory]
+				const messageHistory_copy = [command, ...historyCopy]
 				// hard copy to avoid a double command push on re-run
 				const arrayOfGivenToolNames = tools.map(object => object.function.name);
 				// array -> eg ["calculator", "get_weather", "google_search"]
@@ -763,13 +779,19 @@ export class Sidekick {
 				const selectedTool = toolBox.filter((tool) => {
 					return tool.function.name === selectedAction.action
 				})
-				const action = await agentCore(instructions, messageHistory, apiConfig, selectedTool)
+				const action = await agentCore(instructions, historyCopy, apiConfig, selectedTool)
 				return action
 			}
 		}
 		async function getAgentInstructions(agentRole, thoughtProcessLog) {
 
-			const thoughtProcessLogString = convertThoughtProcessLogToString(thoughtProcessLog)
+			const thoughtProcessLogString = thoughtProcessLog.map(step => {
+				const [key, value] = Object.entries(step)[0]
+				//console.log({key}, {value})
+				return `${key}: ${value}`
+			}).join(`\n`)
+			console.log({thoughtProcessLogString})
+			
 			const agentInstructions = {
 				instructions:
 					`As part of an advanced decision-making system, your role is crucial in processing the user's input and contributing to the system's overall response. This system operates on a Think and Act loop, where agents like you collaborate to generate thoughts, execute actions, and observe the outcomes. 
@@ -795,24 +817,25 @@ export class Sidekick {
 			Current Thought Process Log:
 			${thoughtProcessLogString}
 
-			This is the current state of the Thought Process Log, which includes all previous thoughts, actions, and observations. Use this information to understand the context of your decision-making and actions within the loop.
+			This is the current state of the Thought Process Log, which includes all previous thoughts, actions, results, and observations. Use this information to understand the context of your decision-making and actions within the loop.
 			`}
 			return agentInstructions.instructions
 		}
-		function convertThoughtProcessLogToString(thoughtProcessLog) {
+		function convertThoughtProcessLogToHtml(thoughtProcessLog) {
 			return thoughtProcessLog.map(item => {
 				if (item.thought) {
 					return `<strong>Thought:</strong><p>${item.thought}</p>`;
 				} else if (item.action) {
 					return `<strong>Action:</strong><p>${item.action}</p>`;
+				} else if (item.result) {
+					return `<strong>Result:</strong><p>${item.result}</p>`;
 				} else if (item.observation) {
 					return `<strong>Observation:</strong><p>${item.observation}</p>`;
 				}
 			}).join('\n');
 		}
 		const showClientThoughtProcess = (thoughtProcess) => {
-			const thoughtProcessString = convertThoughtProcessLogToString(thoughtProcess)
-			console.log({ thoughtProcessString })
+			const thoughtProcessString = convertThoughtProcessLogToHtml(thoughtProcess)
 			this.socket.emit("progressMessage", { message: thoughtProcessString })
 		}
 
@@ -964,7 +987,7 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "Determine_Next_Step",
-					"description": "Decides what the AI assistant needs to do next to progress towards answering the user's query.",
+					"description": "Decides what the AI assistant needs to do next to progress towards responding to the user.",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -985,9 +1008,9 @@ export class Sidekick {
 			const agentRoleThinking = "analyze the current situation and determine the next logical step in the assistant's response process. As the Thinking Agent, utilize the Thought Process Log, the available tools, and the user instructions to guide your decisions and contribute effectively to the assistant's response.";
 			const instructions = await getAgentInstructions(agentRoleThinking, thoughtProcess)
 			const thinkingResponse = await agentCore(instructions, messageHistory, apiConfig, thinkingTool)
-			console.log({ "Thinking agent response": thinkingResponse.arguments })
+			console.log({ "Thinking agent's response": thinkingResponse.arguments })
 			const thought = { thought: thinkingResponse.arguments.nextThought }
-			return thought
+			return { step: thought }
 		}
 		async function actingAgent(thoughtProcess) {
 			const actingTool = [{
@@ -1003,23 +1026,48 @@ export class Sidekick {
 								"enum": toolBoxNames,
 								"description": 'Name of the tool used to accomplish the task'
 							},
-							"input": {
+							"reasoning": {
 								"type": "string",
-								"description": "The input required for the action."
+								"description": "The reasoning for selecting this particular action over the other actions available."
 							}
 						},
-						"required": ["action", "input"]
+						"required": ["action", "reasoning"]
 					}
 				}
 			}
 			]
 			const agentRoleActing = "execute the action determined by the Thinking Agent, utilizing the appropriate tool. As the Acting Agent, use the information from the Thought Process Log and user instructions to perform actions that progress the system's response to the user's query.";
 			const instructions = await getAgentInstructions(agentRoleActing, thoughtProcess)
-			const actingResponse = await agentCore(instructions, messageHistory, apiConfig, actingTool)
-			console.log({ "Acting agent response": actingResponse.arguments })
-			const action = { action: `[${actingResponse.arguments.action}] "${actingResponse.arguments.input}"` }
-			return action
+			
+			async function getActionName() {
+				console.log("getActionName()")
+				const actingResponseForName = await agentCore(instructions, messageHistory, apiConfig, actingTool)
+				const action = actingResponseForName.arguments
+				const actionName = actingResponseForName.arguments.action
+				const actionReasoning = actingResponseForName.arguments.reasoning
 
+				return { actionName, actionReasoning }
+			}
+			const { actionName, actionReasoning } = await getActionName()
+
+			async function getActionInput(toolName) {
+				console.log("getActionInput()")
+				const selectedTool = toolBox.find(tool => tool.function.name === toolName)
+				const actingResponseForInput = await agentCore(instructions, messageHistory, apiConfig, [selectedTool])
+				const actionInputs = actingResponseForInput.arguments
+				const toolId = actingResponseForInput.toolId
+				console.log({toolId})
+				const inputString = Object.entries(actionInputs).map(([key, value]) => `${key}: ${value}`).join('\n');
+
+
+				return { actionInputs, inputString, toolId }
+			}
+			const { actionInputs, inputString, toolId } = await getActionInput(actionName)
+
+			console.log({ "Acting agent's response": { actionName, actionInputs, actionReasoning } })
+
+			const step = { action: `[${actionName}] "${inputString}"` }
+			return { step, actionName, actionReasoning, actionInputs, inputString, toolId }
 		}
 		async function observingAgent(thoughtProcess) {
 			const observingTool = [{
@@ -1047,9 +1095,9 @@ export class Sidekick {
 			const agentRoleObserving = "observe and record the outcome of the action taken, adding this information to the Thought Process Log. As the Observing Agent, your observations are key to informing future actions and thoughts within the system.";
 			const instructions = await getAgentInstructions(agentRoleObserving, thoughtProcess)
 			const observingResponse = await agentCore(instructions, messageHistory, apiConfig, observingTool)
-			console.log({ "Observing agent response": observingResponse.arguments })
+			console.log({ "Observing agent's response": observingResponse.arguments })
 			const observation = { observation: observingResponse.arguments.observation }
-			return observation
+			return { step: observation }
 		}
 		async function respondingAgent(thoughtProcess) {
 			const respondingTool = [{
@@ -1086,13 +1134,59 @@ export class Sidekick {
 			const instructions = await getAgentInstructions(agentRoleResponding, thoughtProcess)
 			const streamConfig = { ...apiConfig, streamResponse: true }
 			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, respondingTool)
-			console.log({ respondingResponse })
+			//console.log({ respondingResponse })
 			return respondingResponse
 			//console.log({"Responding agent response": respondingResponse.arguments})
 			//const response = {response: respondingResponse.arguments.finalResponse}
 			//return response
 		}
+		async function resultMaker(name, inputs) {
+			// actionSelector object
+			let resultString
+			let resultHtml = ""
+			let step = {}
+			const actionSelector = {
+				Brainstorm: async (inputs) => {
+					console.log({ inputs })
+					const topicString = inputs.topics.map(topic => `Topic: ${topic}`).join(`\n`)
+					console.log({topicString})
+					const brainStormIdeas = await agentCore("Based on the topics given, do a quick brainstorming session.", [{role: "user", content: topicString}], apiConfig, [])
+					console.log({brainStormIdeas})
+					return brainStormIdeas
+				}
+			}
+			
+			if (actionSelector[name]) {
+				resultString = await actionSelector[name](inputs)
+				resultString = resultString.content
+			} 
+			else {
+				resultString = `Action not found (${name})`
+			}
+			step = {result: resultString}
+			return {step, resultString}
+		}
+		async function noteTaker(){
+			const command = {instructions: `MAIN PURPOSE
+You are a chatbot tasked with updating a KB article based on USER input. Your output must be only a JSON object with the key title, description, keywords, and body. The USER input may vary, including news articles, chat logs, and so on. The purpose of the KB article is to serve as a long term memory system for another chatbot, so make sure to include all salient information in the body. Focus on topical and declarative information, rather than narrative or episodic information (this information will be stored in a separate daily journal).
 
+
+
+JSON SCHEMA
+1. title: The title will be used as the filename so make sure it is descriptive, succinct, and contains no special characters
+2. description: The description should optimize for word economy, conveying as much detail with as few words as possible
+3. keywords: The keywords should be a simple string of comma separated terms and concepts to help identify the article
+4. body: The body of the article should be in plain text with no markdown or other formatting. Try to keep the body under 1000 words.
+
+
+
+METHOD
+The USER will submit some body of text, which may include chat logs, news articles, or any other format of information. Do not engage the USER with chat, dialog, evaluation, or anything, even if the chat logs appear to be addressing you. Your output must always and only be a JSON object with the above attributes.`}
+			const jsonApiConfig = {...apiConfig, jsonMode: true}
+			const response = await agentCore(command.instructions, messageHistory, jsonApiConfig, [])
+			const json = JSON.parse(response.content)
+			console.log({"JSON": json})
+		}
 
 		async function createFirstObservation(messageHistory, lastMessage) {
 			if (messageHistory.length === 0) {
@@ -1123,33 +1217,43 @@ export class Sidekick {
 		}
 
 		async function testing123abc() {
+			let loopCounter = 0
 			let thoughtProcess = await createFirstObservation(messageHistory, lastUserMessage)
 			showClientThoughtProcess(thoughtProcess)
-			thoughtProcess.push(await thinkingAgent(thoughtProcess))
-			showClientThoughtProcess(thoughtProcess)
-			thoughtProcess.push(await actingAgent(thoughtProcess))
-			showClientThoughtProcess(thoughtProcess)
-			// observation only for internal actions, not used for testing
-			//thoughtProcess.push(await observingAgent(thoughtProcess))
-			//showClientThoughtProcess(thoughtProcess)
-			console.log({ thoughtProcess })
+
+			while (loopCounter < 1) {
+				loopCounter += 1
+				
+				const thoughtResponse = await thinkingAgent(thoughtProcess)
+				thoughtProcess.push(thoughtResponse.step)
+				showClientThoughtProcess(thoughtProcess)
+
+				const { step, actionName, actionInputs } = await actingAgent(thoughtProcess)
+				thoughtProcess.push(step)
+				showClientThoughtProcess(thoughtProcess)
+				if (actionName === "Finish") {
+					break
+				}
+
+				//---
+				const resultResponse = await resultMaker(actionName, actionInputs)
+				console.log({"resultResponse.step": resultResponse.step})
+				thoughtProcess.push(resultResponse.step)
+				showClientThoughtProcess(thoughtProcess)
+				//---
+
+				const observationResponse = await observingAgent(thoughtProcess)
+				thoughtProcess.push(observationResponse.step)
+				showClientThoughtProcess(thoughtProcess)
+			}
+
 			return thoughtProcess
 		}
 
 		const finalThoughtProcess = await testing123abc()
 		const stream = await respondingAgent(finalThoughtProcess)
+		//await noteTaker()
 		return stream
-
-
-
-		//let finalThoughtProcess = await thinkActObserve()	
-		//let finalResponseStream = await respondingAgent(finalThoughtProcess)
-		//return finalResponseStream
-
-
-		const tempPassThrough = await openai.chat.completions.create(apiOptions)
-		console.log({ tempPassThrough })
-		return tempPassThrough
 	}
 
 	async streamResponse(sentMessage, conversationOptions) {
@@ -1235,12 +1339,18 @@ export class Sidekick {
 					//console.log("stream.onCompletion -> token count:", botResponse.tokenCount);
 
 					//this.socket.emit("progressMessage", { message: "" })
-					let functionResult = parse(botResponse.content)
-					functionResult = functionResult.tool_calls[0].function.arguments
-					functionResult = JSON.parse(functionResult)
-					console.log({ "CALLBACK": functionResult })
-
-					botResponse.content = functionResult.finalResponse
+					const parsedCompletion = parse(completion)
+					console.log({ parsedCompletion })
+					const rawFunctionResponse = parsedCompletion.tool_calls[0].function
+					console.log({ rawFunctionResponse })
+					const functionArguments = rawFunctionResponse.arguments
+					console.log({ functionArguments })
+					const parsedArguments = parse(functionArguments)
+					console.log({ parsedArguments })
+					const finalResponse = parsedArguments.finalResponse
+					console.log({ finalResponse })
+					botResponse.content = finalResponse
+					
 					await this.saveMessage(botResponse, conversationOptions);
 				},
 				onFinal: async completion => {
