@@ -869,7 +869,7 @@ export class Sidekick {
 					previousObjective = `\n\nThe previous objective has be given for addtional context:\n\n--- BEGIN LAST OBJECTIVE ---\n\n${previousObjective}\n\n--- END LAST OBJECTUVE ---\n\n`
 				}
 				if (feedback) {
-					feedback = `\n\nA seperate ai agent designed to provide assistance has the current feedback for creating the new objective: "${feedback}"\n\n`
+					feedback = `\n\nA seperate ai agent designed to provide assistance has this current feedback for creating the new objective: "${feedback}"\n\n`
 				}
 				const commandPrompt = `You are part of a decision making system. Your goal is to examine the conversation and provide an objective for the AI assistant's next response to the user. The objective should be about 3 sentences.${userInstructions}${previousObjective}${feedback}\n\nMake sure to follow the instructions given by the user when making the new objective.`
 
