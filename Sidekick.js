@@ -150,17 +150,17 @@ export class Sidekick {
 		}
 	}
 
-	async updateThoughtProcess(updatedThoughtProcess) {
-		console.log("updateThoughtProcess()")
+	async updateKnowledgeBase(knowledgeBase) {
+		console.log("updateKnowledgeBase()")
 		try {
 			const conversationRef = doc(this.conversationsRef, this.conversationId);
 			await updateDoc(conversationRef, {
-				thoughtProcess: updatedThoughtProcess,
+				knowledgeBase: knowledgeBase,
 				updatedAt: Date.now(),
 			});
 		}
 		catch (error) {
-			console.error("updateThoughtProcess() -> failed")
+			console.error("updateKnowledgeBase() -> failed")
 		}
 	}
 
@@ -181,27 +181,21 @@ export class Sidekick {
 		}
 	}
 
-	async getThoughtProcess() {
-		console.log("getThoughtProcess()")
+	async getKnowledgeBase() {
+		console.log("getKnowledeBase()")
 		try {
 			const conversationRef = doc(this.conversationsRef, this.conversationId);
 			const snapShot = await getDoc(conversationRef)
 			const conversation = snapShot.data()
-			const thoughtProcess = conversation.thoughtProcess
-			//console.log({ conversation })
-			//console.log({ thoughtProcess })
-			if (!thoughtProcess) {
-				const empty_thoughtProcess = {
-					userInstructions: "",
-					objective: "",
-					objectiveStatement: "",
-					plan: [],
-					planStatement: ""
-				}
-				return empty_thoughtProcess
+			const knowledgeBase = conversation.knowledgeBase
+			if (!knowledgeBase) {
+				const empty_knowledgeBase = {}
+				console.log({empty_knowledgeBase})
+				return empty_knowledgeBase
 			}
 			else {
-				return thoughtProcess
+				console.log({knowledgeBase})
+				return knowledgeBase
 			}
 		}
 		catch (error) {
@@ -528,8 +522,26 @@ export class Sidekick {
 		console.log("************************************************************")
 		console.log("reasoningEngine()")
 		console.log("reasoningEngine() -> getThoughtProcess()...")
-		//[] delete method from class
-		//let original_thoughtProcess = await this.getThoughtProcess()
+		
+		const getKB = async () => {
+			const Old_KB = await this.getKnowledgeBase()
+			return Old_KB
+		}
+		const updateKB = async (givenKB) => {
+			const New_KB = await noteTaker(givenKB)
+			await this.updateKnowledgeBase(New_KB)
+			console.log({New_KB})
+		}
+		const current_KB = await getKB()
+		const KB_string = JSON.stringify(current_KB, null, 2)
+		let KB_instructions = `\nThis is the information that's been learned about the user so far:\n\n${KB_string}`
+		if (Object.keys(current_KB).length === 0) {
+				KB_instructions = ""
+		}
+
+		
+		
+
 
 		let toolBox = [
 			// Brainstorm
@@ -690,13 +702,23 @@ export class Sidekick {
 					const command = { role: "system", content: instructions }
 					historyCopy.push(command)
 				}
+				if (apiConfig.streamResponse === true) {
+					const stream = await openai.chat.completions.create({
+						messages: historyCopy,
+						model: model,
+						stream: true,
+					});
+					return stream
+				}
 				if (apiConfig.jsonMode === true){
 					const completion = await openai.chat.completions.create({
 						messages: historyCopy,
 						model: model,
 						response_format: { "type": "json_object" }
 					});
+					return completion
 				}
+				
 				const completion = await openai.chat.completions.create({
 					messages: historyCopy,
 					model: model,
@@ -811,6 +833,7 @@ export class Sidekick {
 
 			User Instructions: ${userInstructions}
 			These instructions from the user guide how the assistant should behave and respond. It's crucial to align your actions with these expectations for an effective and satisfactory user experience.
+			${KB_instructions}
 
 			Your specific role in this process is to ${agentRole}. Utilize the Thought Process Log, the available tools, and the user instructions to guide your actions and contribute effectively to the assistant's response.
 
@@ -1130,10 +1153,10 @@ export class Sidekick {
 				}
 			}
 			]
-			const agentRoleResponding = "review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations.";
+			const agentRoleResponding = `review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations. The text generated will be directly sent to the user, avoid prefixing it with something like "finalResponse:" etc.`;
 			const instructions = await getAgentInstructions(agentRoleResponding, thoughtProcess)
 			const streamConfig = { ...apiConfig, streamResponse: true }
-			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, respondingTool)
+			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, [])
 			//console.log({ respondingResponse })
 			return respondingResponse
 			//console.log({"Responding agent response": respondingResponse.arguments})
@@ -1167,25 +1190,24 @@ export class Sidekick {
 			return {step, resultString}
 		}
 		async function noteTaker(){
-			const command = {instructions: `MAIN PURPOSE
-You are a chatbot tasked with updating a KB article based on USER input. Your output must be only a JSON object with the key title, description, keywords, and body. The USER input may vary, including news articles, chat logs, and so on. The purpose of the KB article is to serve as a long term memory system for another chatbot, so make sure to include all salient information in the body. Focus on topical and declarative information, rather than narrative or episodic information (this information will be stored in a separate daily journal).
+			const command = {instructions: `You are part of the knowledge base maintenance system. Your goal is to update the user's knowledge base with relevant information based on the ongoing conversation. The knowledge base includes user preferences, lists, hobbies, people in their life, events, important dates and facts, goals, and other relevant data.
 
+**Instructions:**
+1. Examine each message from the user in the conversation history.
+2. Identify and extract any relevant data points or information.
+3. Check if the knowledge base already contains similar data. If yes, update the existing entry; if not, add a new entry.
+4. Continuously update the knowledge base as new information becomes available during the conversation.
 
+**Notes:**
+- User preferences, lists, hobbies, people, events, dates, facts, and goals are all valuable data points to capture and maintain.
+- Ensure that the knowledge base remains organized and easy to reference for future interactions.
 
-JSON SCHEMA
-1. title: The title will be used as the filename so make sure it is descriptive, succinct, and contains no special characters
-2. description: The description should optimize for word economy, conveying as much detail with as few words as possible
-3. keywords: The keywords should be a simple string of comma separated terms and concepts to help identify the article
-4. body: The body of the article should be in plain text with no markdown or other formatting. Try to keep the body under 1000 words.
-
-
-
-METHOD
-The USER will submit some body of text, which may include chat logs, news articles, or any other format of information. Do not engage the USER with chat, dialog, evaluation, or anything, even if the chat logs appear to be addressing you. Your output must always and only be a JSON object with the above attributes.`}
+The knowledge base is a valuable resource for providing personalized and relevant responses to the user. Keep it up-to-date with the latest information. Return it as JSON.\n\nCurrent knowledge base:\n\n${current_KB}\n\nThe knowledge base that's returned will become the new working knowledge base. Anything not included will be forgotten, so also include everything that wasn't updated as well.`}
 			const jsonApiConfig = {...apiConfig, jsonMode: true}
 			const response = await agentCore(command.instructions, messageHistory, jsonApiConfig, [])
-			const json = JSON.parse(response.content)
-			console.log({"JSON": json})
+			const rawJson = response.choices[0].message.content
+			const parsedJson = JSON.parse(rawJson)
+			return parsedJson
 		}
 
 		async function createFirstObservation(messageHistory, lastMessage) {
@@ -1246,6 +1268,8 @@ The USER will submit some body of text, which may include chat logs, news articl
 				thoughtProcess.push(observationResponse.step)
 				showClientThoughtProcess(thoughtProcess)
 			}
+			
+			updateKB() // don't wait
 
 			return thoughtProcess
 		}
@@ -1302,7 +1326,7 @@ The USER will submit some body of text, which may include chat logs, news articl
 
 
 		// apiOptions shouldn't be used to save messages, etc, only for the API call.
-		// reason being that they could be changed in the reasoning engine.
+		// reason being that the variable could be changed in the reasoning engine.
 		const apiOptions = {
 			messages: trimmedChatHistory,
 			model,
@@ -1312,7 +1336,7 @@ The USER will submit some body of text, which may include chat logs, news articl
 		};
 
 		console.log("streamResponse() -> reasoningEngine()...")
-		console.log({ "messages!!!": apiOptions.messages })
+		//console.log({ "messages!!!": apiOptions.messages })
 		let response = await this.reasoningEngine(apiOptions)
 
 		try {
@@ -1339,6 +1363,7 @@ The USER will submit some body of text, which may include chat logs, news articl
 					//console.log("stream.onCompletion -> token count:", botResponse.tokenCount);
 
 					//this.socket.emit("progressMessage", { message: "" })
+					/*
 					const parsedCompletion = parse(completion)
 					console.log({ parsedCompletion })
 					const rawFunctionResponse = parsedCompletion.tool_calls[0].function
@@ -1350,7 +1375,7 @@ The USER will submit some body of text, which may include chat logs, news articl
 					const finalResponse = parsedArguments.finalResponse
 					console.log({ finalResponse })
 					botResponse.content = finalResponse
-					
+					*/
 					await this.saveMessage(botResponse, conversationOptions);
 				},
 				onFinal: async completion => {

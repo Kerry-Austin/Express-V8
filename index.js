@@ -214,9 +214,6 @@ io.on('connection', async (socket) => {
 		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 
 		let buffer = ''; // chunk location
-		let finalResponseChunks = [];// chunk location
-		let isFinalResponse = false; // chunk location
-		let chunkPosition = null
 		let previousFinalResponse = ''
 		// 3. Text Streaming and Sentence Grouping
 		for await (const chunk of streamingText) {
@@ -252,12 +249,13 @@ io.on('connection', async (socket) => {
 			*/
 
 			buffer += textChunk;
-			let jsonResponse = parse(buffer);
+			
+			//let jsonResponse = parse(buffer);
 			//console.log({jsonResponse})
-			let toolArguments = jsonResponse.tool_calls[0]?.function?.arguments;
+			
+			//let toolArguments = jsonResponse.tool_calls[0]?.function?.arguments;
 			//console.log({toolArguments})
 			
-
 			function getNewChunk(currentFinalResponse) {
 				// Determine the new chunk by comparing with the previous state
 				const newChunk = currentFinalResponse.slice(previousFinalResponse.length);
@@ -267,30 +265,30 @@ io.on('connection', async (socket) => {
 			}
 
 			let actualTextchunk = ""
+			/* FILTER OUT FUNCTION PARAMETERS & SEND NEW CHUNKS (if using, remember to change back the sentenceBuffer, to use actualTextChunk instead)
 			try {
 				let parsedArguments = parse(toolArguments);
 				//console.log({parsedArguments})
 				let currentFinalResponse = parsedArguments?.finalResponse;
 				//console.log({currentFinalResponse})
-				
 				// Get the new chunk
-				let newChunk = getNewChunk(currentFinalResponse);
+				let finalResponseChunk = getNewChunk(currentFinalResponse);
 				//console.log({newChunk})
 				// Emit only if there is a new chunk
-				
-				if (newChunk) {
-					socket.emit(`textChunk`, { textChunk: newChunk });
-					actualTextchunk = newChunk
+				if (finalResponseChunk) {
+					socket.emit(`textChunk`, { textChunk: finalResponseChunk });
+					actualTextchunk = finalResponseChunk
 				}
 				
 			} catch (error) {
-				//console.log({ "parsedArguments": `${error}` });
+				console.log({ "parsedArguments": `${error}` });
 			}
+			*/
 
-			//socket.emit(`textChunk`, { textChunk })
+			socket.emit(`textChunk`, { textChunk })
 
 
-			sentenceBuffer += actualTextchunk;
+			sentenceBuffer += textChunk;
 			const sentences = tokenizer.tokenize(sentenceBuffer);
 
 			while (sentences.length > maxSentenceCount) {
