@@ -51,9 +51,16 @@ export async function performSearch(searchQuery) {
 
 export async function askWolfram (textString){
 	const appId = "WWR9JJ-YTEPR878Q7"
+	try{
 	const response = await axios.get(`http://api.wolframalpha.com/v1/spoken?appid=${appId}&input=${encodeURIComponent(textString)}&units=imperial`);
 	console.log({"Wolfram Aplha": response.data})
 	return response.data
+	}catch(error){
+		const response = error.response
+		console.log({"Wolfram Aplha": response.data})
+		return response.data
+	}
 }
 
-await askWolfram ("Weather in Indianapolis")
+//const resultingText = await askWolfram ("What can I do for you, Billy?")
+//console.log({resultingText})

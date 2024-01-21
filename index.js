@@ -69,7 +69,7 @@ let userSocketMap = new Map() // (userId, ws)
 
 
 app.get('/', (req, res) => {
-	res.send('The API is up and running?');
+	res.send('The API is up and running!!');
 });
 
 
