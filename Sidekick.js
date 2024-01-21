@@ -19,6 +19,9 @@ import { jsonrepair } from 'jsonrepair'
 import fetch from 'node-fetch';
 import { Readable } from 'stream';
 import { parse } from 'best-effort-json-parser' // double import (from index.js)
+import { performSearch, askWolfram } from './webSearch.js';
+
+
 
 
 const expressApiKey = process.env['apiKey']
@@ -544,6 +547,24 @@ export class Sidekick {
 
 
 		let toolBox = [
+			//Ask_Wolfram_Alpha
+			{
+				"type": "function",
+				"function": {
+					"name": "Ask_Wolfram_Alpha",
+					"description": "Sends a query to Wolfram Alpha and retrieves the result.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"query": {
+								"type": "string",
+								"description": "The query to be sent to Wolfram Alpha."
+							}
+						},
+						"required": ["query"]
+					}
+				}
+			},
 			// Brainstorm
 			/*
 			{
@@ -1176,7 +1197,12 @@ export class Sidekick {
 					const brainStormIdeas = await agentCore("Based on the topics given, do a quick brainstorming session.", [{role: "user", content: topicString}], apiConfig, [])
 					console.log({brainStormIdeas})
 					return brainStormIdeas
+				},
+				/*
+				Ask_Wolfram_Aplha: async (input) => {
+					console.log({input})
 				}
+				*/
 			}
 			
 			if (actionSelector[name]) {
