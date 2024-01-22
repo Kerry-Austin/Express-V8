@@ -1352,7 +1352,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 			//thoughtProcess = [{thought: "string"}, {action: "string"}, {observation: "string"}]
 			let loopCounter = 0
 
-			while (loopCounter < 3) {
+			while (loopCounter < 2) {
 				loopCounter += 1
 				thoughtProcess.push(await thinkingAgent(thoughtProcess))
 				thoughtProcess.push(await actingAgent(thoughtProcess))
