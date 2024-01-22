@@ -540,26 +540,41 @@ export class Sidekick {
 		const KB_string = JSON.stringify(current_KB, null, 2)
 		let KB_instructions = `\nThis is the information that's been learned about the user so far:\n\n${KB_string}`
 		if (Object.keys(current_KB).length === 0) {
-			KB_instructions = "This is the information that's been learned about the user so far:\n\npreferences: {}, lists: {}, hobbies: {}, people: {}, events: {}, important_dates: {}, facts: {}, goals: {}"
+			KB_instructions = ""
 		}
 
 
-
-
-
 		let toolBox = [
+			// Finish
+			{
+				type: "function",
+				function: {
+					name: "Finish",
+					description: "Indicates that the final response is ready and the thought process can be concluded.",
+					parameters: {
+						type: "object",
+						properties: {
+							finalResponse: {
+								type: "string",
+								description: "The final response or conclusion reached by the agent."
+							}
+						},
+						required: ["finalResponse"]
+					}
+				}
+			},
 			//Look_Up_Fact
 			{
 				"type": "function",
 				"function": {
 					"name": "Look_Up_Fact",
-					"description": `Used tool exclusively for retrieving specialized information from Wolfram Alpha. It takes a query (the weather condition, a mathematical calculation, simple fact look-ups, conversions, scientific data, geographical information, nutrition, language translation), and answers it. This function only answers the question given if it's not an opinion, such as "the best X", or things that don't have a specific concrete answer. It can't create things like lists, or make suggestions. The infromation it retrieves is internal, and must be sent to the user separatly. `,
+					"description": `Used for exclusively for retrieving specialized information from Wolfram Alpha. It takes a question (the weather condition, a mathematical calculation, simple fact look-ups, conversions, scientific data, geographical information, nutrition, language translation), and answers it. Doesn't work for opinions, such as "the best X", or things that don't have a specific concrete answer. It can't create things like lists, or make suggestions. The infromation it retrieves is internal, and must be sent to the user separatly.`,
 					"parameters": {
 						"type": "object",
 						"properties": {
-							"query": {
+							"question": {
 								"type": "string",
-								"description": "The question to be sent to Wolfram Alpha."
+								"description": "The question to look up."
 							}
 						},
 						"required": ["query"]
@@ -589,24 +604,7 @@ export class Sidekick {
 				}
 			},
 			*/
-			// Finish
-			{
-				type: "function",
-				function: {
-					name: "Finish",
-					description: "Indicates that the final response is ready and the thought process can be concluded.",
-					parameters: {
-						type: "object",
-						properties: {
-							finalResponse: {
-								type: "string",
-								description: "The final response or conclusion reached by the agent."
-							}
-						},
-						required: ["finalResponse"]
-					}
-				}
-			},
+			
 			/*
 			// Summarize
 			{
@@ -691,8 +689,7 @@ export class Sidekick {
 		const apiConfig = { ...apiOptions }
 		//console.log({ apiConfig })
 		apiConfig.model = "gpt-3.5-turbo-1106"
-		// gpt-4-1106-preview 
-		// gpt-3.5-turbo-1106
+		//apiConfig.model = "gpt-4-1106-preview"
 
 
 		// Definitions
@@ -882,9 +879,10 @@ export class Sidekick {
 				}
 			}).join('\n');
 		}
-		const showClientThoughtProcess = (thoughtProcess) => {
-			const thoughtProcessString = convertThoughtProcessLogToHtml(thoughtProcess)
-			this.socket.emit("progressMessage", { message: thoughtProcessString })
+		const showClientThoughtProcess = (progressText) => { // (thoughtProcess) => {
+			//const thoughtProcessString = convertThoughtProcessLogToHtml(thoughtProcess)
+			//this.socket.emit("progressMessage", { message: thoughtProcessString })
+			this.socket.emit("progressMessage", { message: `<p>${progressText}..</p>` })
 		}
 
 		async function referenceFunctions() {
@@ -1046,10 +1044,15 @@ export class Sidekick {
 							"nextThought": {
 								"type": "string",
 								"description": "The next logical thought or step in the process."
+							},
+							"progressMessage": {
+								"type": "string",
+								"description": "A message to the user written in the first person perspective about what the current plan is."
 							}
 						},
-						"required": ["latestObservation", "nextThought"]
+						"required": ["latestObservation", "nextThought", "progressMessage"]
 					}
+
 				}
 			}
 			]
@@ -1058,7 +1061,7 @@ export class Sidekick {
 			const thinkingResponse = await agentCore(instructions, messageHistory, apiConfig, thinkingTool)
 			console.log({ "Thinking agent's response": thinkingResponse.arguments })
 			const thought = { thought: thinkingResponse.arguments.nextThought }
-			return { step: thought }
+			return { step: thought, thinking_progressMessage: thinkingResponse.arguments.progressMessage }
 		}
 		async function actingAgent(thoughtProcess) {
 			const actingTool = [{
@@ -1077,9 +1080,13 @@ export class Sidekick {
 							"reasoning": {
 								"type": "string",
 								"description": `The reasoning for selecting this particular tool over the other tools available.`
+							},
+							"progressMessage": {
+								"type": "string",
+								"description": "A message to the user written in the first person perspective about what the current plan is."
 							}
 						},
-						"required": ["action", "reasoning"]
+						"required": ["action", "reasoning", "progressMessage"]
 					}
 				}
 			}
@@ -1091,12 +1098,13 @@ export class Sidekick {
 				console.log("getActionName()")
 				const actingResponseForName = await agentCore(instructions, messageHistory, apiConfig, actingTool)
 				const action = actingResponseForName.arguments
+				console.log({action})
 				const actionName = actingResponseForName.arguments.action
 				const actionReasoning = actingResponseForName.arguments.reasoning
 
-				return { actionName, actionReasoning }
+				return { actionName, actionReasoning, action_progressMessage: action.progressMessage}
 			}
-			const { actionName, actionReasoning } = await getActionName()
+			const { actionName, actionReasoning, action_progressMessage} = await getActionName()
 
 			async function getActionInput(toolName) {
 				console.log("getActionInput()")
@@ -1115,7 +1123,7 @@ export class Sidekick {
 			console.log({ "Acting agent's response": { actionName, actionInputs, actionReasoning } })
 
 			const step = { action: `[${actionName}] "${inputString}"` }
-			return { step, actionName, actionReasoning, actionInputs, inputString, toolId }
+			return { step, actionName, actionReasoning, actionInputs, inputString, toolId, action_progressMessage }
 		}
 		async function observingAgent(thoughtProcess) {
 			const observingTool = [{
@@ -1133,9 +1141,13 @@ export class Sidekick {
 							"observation": {
 								"type": "string",
 								"description": "The observation to be recorded in the Thought Process Log."
+							},
+							"progressMessage": {
+								"type": "string",
+								"description": "A message to the user written in the first person perspective about what the current plan is."
 							}
 						},
-						"required": ["actionResult", "observation"]
+						"required": ["actionResult", "observation", "progressMessage"]
 					}
 				}
 			}
@@ -1145,7 +1157,7 @@ export class Sidekick {
 			const observingResponse = await agentCore(instructions, messageHistory, apiConfig, observingTool)
 			console.log({ "Observing agent's response": observingResponse.arguments })
 			const observation = { observation: observingResponse.arguments.observation }
-			return { step: observation }
+			return { step: observation, observation_progressMessage: observingResponse.arguments.progressMessage }
 		}
 		async function respondingAgent(thoughtProcess) {
 			const respondingTool = [{
@@ -1206,7 +1218,7 @@ export class Sidekick {
 				},
 
 				Look_Up_Fact: async (input) => {
-					const query = input.query
+					const query = input.question
 					const wolframAnswer = await askWolfram(query)
 					console.log({ wolframAnswer })
 					return wolframAnswer
@@ -1255,7 +1267,7 @@ export class Sidekick {
 			}).join(`\n`)
 			const command = `Make a decision on whether to send the final response or to continue the thought process. If it's clear that further thinking and action won't significantly improve the response, then choose to stop. Consider the user's need for a prompt response and avoid unnecessary looping in the thought process.\n\n${LogExamples}\n\nCURRENT THOUGHT PROCESS:\n\n${thoughtProcessLogString}`
 			const response = await agentCore(command, [], apiConfig, stoppingTool)
-			console.log({"STOPPING AGENT RESPONSE": response})
+			console.log({ "STOPPING AGENT RESPONSE": response })
 			return response.arguments
 		}
 		async function noteTaker() {
@@ -1283,7 +1295,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 
 		async function createFirstObservation(messageHistory, lastMessage) {
 			if (messageHistory.length === 0) {
-				return [{ observation: "The conversation has just started. The assistant should greet the user." }];
+				return [{ observation: "The conversation has just started. I should greet the user." }];
 			} else {
 				const content = lastMessage.content
 				return [{ observation: `The user replied: "${content}"` }];
@@ -1312,7 +1324,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		async function testing123abc() {
 			let loopCounter = 0
 			let thoughtProcess = await createFirstObservation(messageHistory, lastUserMessage)
-			showClientThoughtProcess(thoughtProcess)
+			showClientThoughtProcess("I'm thinking of an initial response.")
 
 			while (loopCounter < 4) {
 				loopCounter += 1
@@ -1320,37 +1332,40 @@ The knowledge base is a valuable resource for providing personalized and relevan
 				// Make Thought
 				const thoughtResponse = await thinkingAgent(thoughtProcess)
 				thoughtProcess.push(thoughtResponse.step)
-				showClientThoughtProcess(thoughtProcess)
+				console.log({"THOUGHT": thoughtResponse.thinking_progressMessage})
+				showClientThoughtProcess(thoughtResponse.thinking_progressMessage)
 
 				// Determine Action
-				const { step, actionName, actionInputs } = await actingAgent(thoughtProcess)
+				const { step, actionName, actionInputs, action_progressMessage } = await actingAgent(thoughtProcess)
+				console.log({"ACTION": action_progressMessage})
 				if (actionName === "Finish") {
 					break
 				}
 				thoughtProcess.push(step)
-				showClientThoughtProcess(thoughtProcess)
-				
+				showClientThoughtProcess(action_progressMessage)
+
 				// Provide Result
 				const resultResponse = await resultMaker(actionName, actionInputs)
 				console.log({ "resultResponse.step": resultResponse.step })
 				//thoughtProcess.push(resultResponse.step)
-				const resultsIncluded = [...thoughtProcess, resultResponse.step] 
-				console.log({resultsIncluded})
+				const resultsIncluded = [...thoughtProcess, resultResponse.step]
+				console.log({ resultsIncluded })
 				//showClientThoughtProcess(thoughtProcess)
 
 				// Observe Result
 				const observationResponse = await observingAgent(resultsIncluded)
+				console.log({"OBSERVATION": observationResponse.observation_progressMessage})
 				thoughtProcess.push(observationResponse.step)
-				showClientThoughtProcess(thoughtProcess)
+				showClientThoughtProcess(observationResponse.observation_progressMessage)
 
 				// Stopping Agent
 				const stopResponse = await stoppingAgent(thoughtProcess)
-				if (stopResponse.decision === "stop"){
+				if (stopResponse.decision === "stop") {
 					break
 				}
 			}
 
-			updateKB() // don't wait
+			//updateKB() // don't wait
 
 			return thoughtProcess
 		}
@@ -1358,6 +1373,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		const finalThoughtProcess = await testing123abc()
 		const stream = await respondingAgent(finalThoughtProcess)
 		//await noteTaker()
+		this.socket.emit("progressMessage", { message: "" })
 		return stream
 	}
 
