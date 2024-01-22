@@ -58,7 +58,7 @@ export async function askWolfram (textString){
 	}catch(error){
 		const response = error.response
 		console.log({"Wolfram Aplha": response.data})
-		return response.data
+		return `${response.data}. It likely isn't appropriate for this use case.`
 	}
 }
 
