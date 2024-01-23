@@ -731,6 +731,7 @@ export class Sidekick {
 			})
 		}
 
+		const progressMessageInstructions = `A progress bar loading screen message. The message is written in the first person perspective about what the the assistant is currently thinking about.`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -903,7 +904,7 @@ export class Sidekick {
 		const showClientThoughtProcess = (progressText) => { // (thoughtProcess) => {
 			//const thoughtProcessString = convertThoughtProcessLogToHtml(thoughtProcess)
 			//this.socket.emit("progressMessage", { message: thoughtProcessString })
-			this.socket.emit("progressMessage", { message: `<p>${progressText}..</p>` })
+			this.socket.emit("progressMessage", { message: `${progressText}` })
 		}
 
 		async function referenceFunctions() {
@@ -1068,7 +1069,7 @@ export class Sidekick {
 							},
 							"progressMessage": {
 								"type": "string",
-								"description": "A message to the user written in the first person perspective about what the current plan is."
+								"description": `${progressMessageInstructions}`
 							}
 						},
 						"required": ["latestObservation", "nextThought", "progressMessage"]
@@ -1108,7 +1109,7 @@ export class Sidekick {
 							},
 							"progressMessage": {
 								"type": "string",
-								"description": "A message to the user written in the first person perspective about what the current plan is."
+								"description": `${progressMessageInstructions}`
 							}
 						},
 						"required": ["latestThought", "action", "reasoning", "progressMessage"]
@@ -1169,7 +1170,7 @@ export class Sidekick {
 							},
 							"progressMessage": {
 								"type": "string",
-								"description": "A message to the user written in the first person perspective about what the current plan is."
+								"description": `${progressMessageInstructions}`
 							}
 						},
 						"required": ["actionResult", "observation", "progressMessage"]
@@ -1251,7 +1252,7 @@ export class Sidekick {
 				},
 
 				Self_Query: async (input) => {
-					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set alarms, reminders, or properly browse the internet. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Some like the "Finish" tool are internal and shouldn't be shared with the user."`
+					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set alarms, reminders, or properly browse the internet. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Some tools, like the "Finish" tool, are internal and shouldn't be shared with the user."`
 					return featureList
 				}
 
