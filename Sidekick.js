@@ -1395,7 +1395,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 			let thoughtProcess = await createFirstObservation(messageHistory, lastUserMessage)
 			//showClientThoughtProcess("I'm thinking of an initial response.")
 
-			while (loopCounter < 1) {
+			while (loopCounter < 4) {
 				loopCounter += 1
 
 				// Make Thought
