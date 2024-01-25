@@ -19,7 +19,7 @@ import { jsonrepair } from 'jsonrepair'
 import fetch from 'node-fetch';
 import { Readable } from 'stream';
 import { parse } from 'best-effort-json-parser' // double import (from index.js)
-import { performSearch, askWolfram } from './webSearch.js';
+import { searchGoogle, askWolfram, scrapeWebsite } from './webSearch.js';
 import { LogExamples } from "./examplePrompts.js"
 
 
@@ -80,8 +80,6 @@ export class Sidekick {
 	createResponse(success, data = null, error = null) {
 		return { success, data, error }
 	}
-
-
 
 	async createDocument() {
 		console.log("createDocument()");
@@ -563,7 +561,7 @@ export class Sidekick {
 					}
 				}
 			},
-			//Look_Up_Fact
+			//Look up fact
 			{
 				"type": "function",
 				"function": {
@@ -581,7 +579,7 @@ export class Sidekick {
 					}
 				}
 			},
-			// Ask About Features
+			// Self-ask about features
 			{
 				"type": "function",
 				"function": {
@@ -599,6 +597,28 @@ export class Sidekick {
 					}
 				}
 			},
+			// Scrape webpage
+			/*{
+				"type": "function",
+				"function": {
+					"name": "WebpageScraper",
+					"description": "Scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"url": {
+								"type": "string",
+								"description": "The URL of the webpage to be scraped."
+							},
+							"objective": {
+								"type": "string",
+								"description": "A descriptive string indicating what the scraper should focus on or accomplish within the webpage."
+							}
+						},
+						"required": ["url", "objective"]
+					}
+				}
+			}*/
 
 
 
@@ -731,7 +751,7 @@ export class Sidekick {
 			})
 		}
 
-		const progressMessageInstructions = `A progress bar loading screen message. The message is written in the first person perspective about what the the assistant is currently thinking about.`
+		const loadingScreenInstructions = `The text unde a progress bar in a loading screen. The message is written in the first person perspective about what the the assistant is currently thinking about. Instead of using "the user", address it directly to them instead by using "you".\n***The loading message must include begin with "I" and should include the word "you"***.`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -770,7 +790,7 @@ export class Sidekick {
 			}
 			if (tools.length === 1) {
 				console.log("agentCore() -> tools.length = 1")
-				//console.log(`TOOL: ${tools[0].function.name}`)
+				console.log(`TOOL: ${tools[0].function.name}`)
 				if (instructions) {
 					const command = { role: "system", content: instructions }
 					historyCopy.push(command)
@@ -1067,12 +1087,12 @@ export class Sidekick {
 								"type": "string",
 								"description": "The next logical thought or step in the process."
 							},
-							"progressMessage": {
+							"loadingScreenMessage": {
 								"type": "string",
-								"description": `${progressMessageInstructions}`
+								"description": `${loadingScreenInstructions}`
 							}
 						},
-						"required": ["latestObservation", "nextThought", "progressMessage"]
+						"required": ["latestObservation", "nextThought", "loadingScreenMessage"]
 					}
 
 				}
@@ -1083,7 +1103,7 @@ export class Sidekick {
 			const thinkingResponse = await agentCore(instructions, messageHistory, apiConfig, thinkingTool)
 			console.log({ "Thinking agent's response": thinkingResponse.arguments })
 			const thought = { thought: thinkingResponse.arguments.nextThought }
-			return { step: thought, thinking_progressMessage: thinkingResponse.arguments.progressMessage }
+			return { step: thought, thinking_loadingScreenMessage: thinkingResponse.arguments.loadingScreenMessage }
 		}
 		async function actingAgent(thoughtProcess) {
 			const actingTool = [{
@@ -1107,12 +1127,12 @@ export class Sidekick {
 								"type": "string",
 								"description": `The reasoning for selecting this particular tool over the other tools available.`
 							},
-							"progressMessage": {
+							"loadingScreenMessage": {
 								"type": "string",
-								"description": `${progressMessageInstructions}`
+								"description": `${loadingScreenInstructions}`
 							}
 						},
-						"required": ["latestThought", "action", "reasoning", "progressMessage"]
+						"required": ["latestThought", "action", "reasoning", "loadingScreenMessage"]
 					}
 				}
 			}
@@ -1128,9 +1148,9 @@ export class Sidekick {
 				const actionName = actingResponseForName.arguments.action
 				const actionReasoning = actingResponseForName.arguments.reasoning
 
-				return { actionName, actionReasoning, action_progressMessage: action.progressMessage }
+				return { actionName, actionReasoning, action_loadingScreenMessage: action.loadingScreenMessage }
 			}
-			const { actionName, actionReasoning, action_progressMessage } = await getActionName()
+			const { actionName, actionReasoning, action_loadingScreenMessage } = await getActionName()
 
 			async function getActionInput(toolName) {
 				console.log("getActionInput()")
@@ -1149,7 +1169,7 @@ export class Sidekick {
 			console.log({ "Acting agent's response": { actionName, actionInputs, actionReasoning } })
 
 			const step = { action: `[${actionName}] "${inputString}"` }
-			return { step, actionName, actionReasoning, actionInputs, inputString, toolId, action_progressMessage }
+			return { step, actionName, actionReasoning, actionInputs, inputString, toolId, action_loadingScreenMessage }
 		}
 		async function observingAgent(thoughtProcess) {
 			const observingTool = [{
@@ -1168,12 +1188,12 @@ export class Sidekick {
 								"type": "string",
 								"description": "The observation to be recorded in the Thought Process Log."
 							},
-							"progressMessage": {
+							"loadingScreenMessage": {
 								"type": "string",
-								"description": `${progressMessageInstructions}`
+								"description": `${loadingScreenInstructions}`
 							}
 						},
-						"required": ["actionResult", "observation", "progressMessage"]
+						"required": ["actionResult", "observation", "loadingScreenMessage"]
 					}
 				}
 			}
@@ -1183,7 +1203,7 @@ export class Sidekick {
 			const observingResponse = await agentCore(instructions, messageHistory, apiConfig, observingTool)
 			console.log({ "Observing agent's response": observingResponse.arguments })
 			const observation = { observation: observingResponse.arguments.observation }
-			return { step: observation, observation_progressMessage: observingResponse.arguments.progressMessage }
+			return { step: observation, observation_loadingScreenMessage: observingResponse.arguments.loadingScreenMessage }
 		}
 		async function respondingAgent(thoughtProcess) {
 			const respondingTool = [{
@@ -1234,26 +1254,27 @@ export class Sidekick {
 			let resultHtml = ""
 			let step = {}
 			const actionSelector = {
-				Brainstorm: async (inputs) => {
-					console.log({ inputs })
-					const topicString = inputs.topics.map(topic => `Topic: ${topic}`).join(`\n`)
-					console.log({ topicString })
-					const brainStormIdeas = await agentCore("Based on the topics given, do a quick brainstorming session.", [{ role: "user", content: topicString }], apiConfig, [])
-					console.log({ brainStormIdeas })
-					const result = brainStormIdeas.content
-					return result
-				},
-
 				Retrieve_External_Fact: async (input) => {
 					const query = input.question
 					const wolframAnswer = await askWolfram(query)
-					console.log({ wolframAnswer })
 					return wolframAnswer
 				},
 
 				Self_Query: async (input) => {
 					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set alarms, reminders, or properly browse the internet. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Some tools, like the "Finish" tool, are internal and shouldn't be shared with the user."`
 					return featureList
+				},
+				WebpageScraper: async (input) => {
+					const url = input.url
+					const objective = input.objective
+					console.log({objective})
+					const websiteData = await scrapeWebsite(url)
+					const websiteDataString = websiteData.string
+					const instructions = `You are an expert web scraper. Your job is to extract all of the useful and relevant information from the web page.\n\nInclude all of the relevant details because the user can't access the page themselves and the page will only be accessed this one time. \n\nThe user's current objective: ${objective}\n\n*** Remember to include all of the relevant details, as the web page won't get acccesd again. ***`
+					const fakeHistory = [{role: "assistant", content: `Website data:\n\n${websiteDataString}`}]
+					const pageSummary = await agentCore(instructions, fakeHistory, apiConfig, [])
+					//console.log({pageSummary})
+					return pageSummary.content
 				}
 
 			}
@@ -1273,11 +1294,12 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "Determine_Thought_Process_Status",
-					"description": "Decides whether the thought process should continue or stop based on reasoning.",
+					"description": "Decides whether the thought process should continue or if it should stop and give the user a response.",
 					"parameters": {
 						"type": "object",
 						"properties": {
-							"thoughtProcessLog": {
+							// using gpt 4, removed redocumenting log for cost savings
+							/*"thoughtProcessLog": {
 								"type": "array",
 								"items": {
 									"type": "object",
@@ -1289,18 +1311,18 @@ export class Sidekick {
 									}
 								},
 								"description": "The complete log of thoughts, actions, results and observations."
-							},
+							},*/
 							"decision": {
 								"type": "string",
-								"enum": ["continue", "stop"],
-								"description": "The decision to either continue or stop the thought process."
+								"enum": ["thinkSomeMore", "respondToUser"],
+								"description": "The decision to either continue or stop the thought process. The user will only get recieve a response once the thought process has been stopped."
 							},
 							"reasoning": {
 								"type": "string",
 								"description": "The reasoning behind the decision."
 							}
 						},
-						"required": ["thoughtProcessLog", "decision", "reasoning"]
+						"required": [/*"thoughtProcessLog",*/ "decision", "reasoning"]
 					}
 				}
 			}
@@ -1311,7 +1333,9 @@ export class Sidekick {
 				return `${key}: ${value}`
 			}).join(`\n`)
 			const command = `Make a decision on whether to send the final response or to continue the thought process. If it's clear that further thinking and action won't significantly improve the response, then choose to stop. Consider the user's need for a prompt response and avoid unnecessary looping in the thought process.\n\n${LogExamples}\n\nCURRENT THOUGHT PROCESS:\n\n${thoughtProcessLogString}`
-			const response = await agentCore(command, [], apiConfig, stoppingTool)
+			let useGPT4 = {...apiConfig};
+			useGPT4.model = "gpt-4-1106-preview"
+			const response = await agentCore(command, [], useGPT4, stoppingTool)
 			console.log({ "STOPPING AGENT RESPONSE": response })
 			return response.arguments
 		}
@@ -1369,25 +1393,25 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		async function testing123abc() {
 			let loopCounter = 0
 			let thoughtProcess = await createFirstObservation(messageHistory, lastUserMessage)
-			showClientThoughtProcess("I'm thinking of an initial response.")
+			//showClientThoughtProcess("I'm thinking of an initial response.")
 
-			while (loopCounter < 4) {
+			while (loopCounter < 1) {
 				loopCounter += 1
 
 				// Make Thought
 				const thoughtResponse = await thinkingAgent(thoughtProcess)
 				thoughtProcess.push(thoughtResponse.step)
-				console.log({ "THOUGHT": thoughtResponse.thinking_progressMessage })
-				showClientThoughtProcess(thoughtResponse.thinking_progressMessage)
+				console.log({ "THOUGHT": thoughtResponse.thinking_loadingScreenMessage })
+				showClientThoughtProcess(thoughtResponse.thinking_loadingScreenMessage)
 
 				// Determine Action
-				const { step, actionName, actionInputs, action_progressMessage } = await actingAgent(thoughtProcess)
-				console.log({ "ACTION": action_progressMessage })
+				const { step, actionName, actionInputs, action_loadingScreenMessage } = await actingAgent(thoughtProcess)
+				console.log({ "ACTION": action_loadingScreenMessage })
 				if (actionName === "Finish") {
 					break
 				}
 				thoughtProcess.push(step)
-				showClientThoughtProcess(action_progressMessage)
+				showClientThoughtProcess(action_loadingScreenMessage)
 
 				// Provide Result
 				const resultResponse = await resultMaker(actionName, actionInputs)
@@ -1398,14 +1422,14 @@ The knowledge base is a valuable resource for providing personalized and relevan
 
 				// Observe Result
 				const observationResponse = await observingAgent(thoughtProcess)
-				console.log({ "OBSERVATION": observationResponse.observation_progressMessage })
+				console.log({ "OBSERVATION": observationResponse.observation_loadingScreenMessage })
 				thoughtProcess.push(observationResponse.step)
-				showClientThoughtProcess(observationResponse.observation_progressMessage)
+				showClientThoughtProcess(observationResponse.observation_loadingScreenMessage)
 
 				// Stopping Agent
 				const stopResponse = await stoppingAgent(thoughtProcess)
 				console.log({ thoughtProcess }, { stopResponse })
-				if (stopResponse.decision === "stop") {
+				if (stopResponse.decision === "respondToUser") {
 					break
 				}
 			}
@@ -1419,6 +1443,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		const stream = await respondingAgent(finalThoughtProcess)
 		//await noteTaker()
 		this.socket.emit("progressMessage", { message: "" })
+		this.socket.emit("ServerToServer", { message: ""})
 		return stream
 	}
 
