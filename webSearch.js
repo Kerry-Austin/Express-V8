@@ -232,24 +232,19 @@ const testUrl = 'https://example.com'; // Replace with your target URL
 //const websiteData = await scrapeWebsite(testUrl)
 
 async function simpleScrape(url) {
-	const username = 'brd-customer-hl_79f94069-zone-unblocker';
-	const password = '4zoph0pu03x3';
-	const port = 22225;
-	const session_id = (1000000 * Math.random()) | 0;
-	const options = {
-		auth: {
-			username: `${username}`,
-			password: password
-		},
-		protocol: 'http',
-		host: 'brd.superproxy.io',
-		port: port,
-		rejectUnauthorized: false
-	};
-
+	console.log("simpleScrape()...")
+	
 	// Fetch the HTML content from the URL
-	const response = await axios.get(url, { proxy: options });
+	console.log("going to url...")
+	const response = await axios.get('https://app.scrapingbee.com/api/v1/', {
+			params: {
+					'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
+					'url': 'https://example.com/', 
+					'block_ads': 'true', 
+			} 
+	})
 	const html = response.data;
+	console.log("got data!")
 
 	// Load HTML into Cheerio
 	const $ = cheerio.load(html);
@@ -274,6 +269,7 @@ async function simpleScrape(url) {
 	}
 
 	// Iterate over all elements on the page
+	console.log("Organizing page...")
 	$('*').each((_, el) => {
 		let textContent = $(el).text() || '';
 		textContent = cleanText(textContent);
@@ -290,7 +286,7 @@ async function simpleScrape(url) {
 			}
 		}
 	});
-
+console.log("Returning results")
 	return { json: results, string: JSON.stringify(results, null, 2) }
 }
 const scrapeResult = await simpleScrape(testUrl)
