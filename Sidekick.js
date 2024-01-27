@@ -583,7 +583,7 @@ export class Sidekick {
 			{
 				"type": "function",
 				"function": {
-					"name": "Self_Query",
+					"name": "ListFeatures",
 					"description": "Use this tool for answering questions about the AI assistant's own capabilities and functions. It accesses the internal knowledge base to provide a list or explanation of what the AI can do. Not for external data retrieval.",
 					"parameters": {
 						"type": "object",
@@ -598,7 +598,7 @@ export class Sidekick {
 				}
 			},
 			// Scrape webpage
-			/*{
+			{
 				"type": "function",
 				"function": {
 					"name": "WebpageScraper",
@@ -618,7 +618,7 @@ export class Sidekick {
 						"required": ["url", "objective"]
 					}
 				}
-			}*/
+			}
 
 
 
@@ -1237,7 +1237,7 @@ export class Sidekick {
 				}
 			}
 			]
-			const agentRoleResponding = `review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations. The text generated will be directly sent to the user, avoid prefixing it with something like "finalResponse:" etc.`;
+			const agentRoleResponding = `review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations. The text generated will be directly sent to the user, avoid prefixing it with something like "finalResponse:" etc.\n*** Separate large blocks of text with a new line. ***`;
 			const instructions = await getAgentInstructions(agentRoleResponding, thoughtProcess)
 			const streamConfig = { ...apiConfig, streamResponse: true }
 			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, [])
@@ -1260,7 +1260,7 @@ export class Sidekick {
 					return wolframAnswer
 				},
 
-				Self_Query: async (input) => {
+				ListFeatures: async (input) => {
 					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set alarms, reminders, or properly browse the internet. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Some tools, like the "Finish" tool, are internal and shouldn't be shared with the user."`
 					return featureList
 				},
@@ -1270,7 +1270,7 @@ export class Sidekick {
 					console.log({objective})
 					const websiteData = await scrapeWebsite(url)
 					const websiteDataString = websiteData.string
-					const instructions = `You are an expert web scraper. Your job is to extract all of the useful and relevant information from the web page.\n\nInclude all of the relevant details because the user can't access the page themselves and the page will only be accessed this one time. \n\nThe user's current objective: ${objective}\n\n*** Remember to include all of the relevant details, as the web page won't get acccesd again. ***`
+					const instructions = `You are an expert web scraper. Your job is to extract all of the useful and relevant information from the web page, and provide specific infromation in full markdown format. Use headings, bullet points and various other markdown elements.\n\n Include all of the relevant details in the markdown because the user can't access the page themselves and the page will only be accessed this one time. \n\nThe user's current objective: ${objective}\n\n*** Remember to include all of the relevant details, as the web page won't get acccesd again. The output shouold be mostly headings and bullet points.***`
 					const fakeHistory = [{role: "assistant", content: `Website data:\n\n${websiteDataString}`}]
 					const pageSummary = await agentCore(instructions, fakeHistory, apiConfig, [])
 					//console.log({pageSummary})
@@ -1443,7 +1443,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		const stream = await respondingAgent(finalThoughtProcess)
 		//await noteTaker()
 		this.socket.emit("progressMessage", { message: "" })
-		this.socket.emit("ServerToServer", { message: ""})
+		this.socket.emit("ServerToServer", { message: "SERVER TEST #1"})
 		return stream
 	}
 

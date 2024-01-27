@@ -2,6 +2,10 @@ import axios from 'axios-https-proxy-fix';
 import puppeteer from 'puppeteer-core';
 //import fetch from "node-fetch"
 import { promises as fs } from 'fs';
+import * as cheerio from 'cheerio';
+//import { HttpsProxyAgent } from 'https-proxy-agent';
+
+
 
 
 // Search Configuration
@@ -52,8 +56,7 @@ export async function searchGoogle(searchQuery) {
 	console.log({ topFive })
 	return topFive
 }
-
-//await performSearch("weather")
+//await searchGoogle("weather")
 
 export async function askWolfram(textString) {
 	const appId = "WWR9JJ-YTEPR878Q7"
@@ -75,7 +78,6 @@ const browserPassword = "yh2b8q1jxslz"
 const AUTH = `${browserUsername}:${browserPassword}`
 const SBR_WS_ENDPOINT = `wss://${AUTH}@brd.superproxy.io:9222`;
 
-// eventually will move to a simple node-fetch call & Cheerio, getting puppeteer to work first
 export async function scrapeWebsite(url) {
 	async function tryToConnect(webSocket, maxAttempts = 5, interval = 2000) {
 		// Function to create a timeout promise
@@ -109,10 +111,10 @@ export async function scrapeWebsite(url) {
 	let data = {};
 	let contentArray = []
 	try {
-	console.log("Connecting to browser...");
-	browser = await tryToConnect(SBR_WS_ENDPOINT, 5, 3000);
-	console.log("Connected!")
-	
+		console.log("Connecting to browser...");
+		browser = await tryToConnect(SBR_WS_ENDPOINT, 5, 3000);
+		console.log("Connected!")
+
 
 		console.log("Starting navigation...")
 		const page = await browser.newPage();
@@ -142,11 +144,11 @@ export async function scrapeWebsite(url) {
 		const client = await page.createCDPSession();
 		console.log('Waiting captcha to solve...');
 		const { status } = await client.send('Captcha.waitForSolve', {
-				 detectTimeout: 5000,
-		 });
+			detectTimeout: 5000,
+		});
 		console.log('Captcha solve status:', status);
-		
-		
+
+
 		console.log("Navigated!")
 		data = await page.evaluate(() => {
 			// Define arrays for heading tags and tags to exclude from scraping
@@ -200,43 +202,99 @@ export async function scrapeWebsite(url) {
 
 			return results; // Return the results object containing headings and their text content
 		});
-		if (status === "solve_failed"){
-			data = {Error: "This website has a captcha. The browser tried to solve it automatically, but failed."}
+		if (status === "solve_failed") {
+			data = { Error: "This website has a captcha. The browser tried to solve it automatically, but failed." }
 		}
 
 	}
 	catch (error) {
-		console.error('Error during scraping!', {error});
-		data = {Error: "Couldn't access the webpage."}
+		console.error('Error during scraping!', { error });
+		data = { Error: "Couldn't access the webpage." }
 	}
 	finally {
 		console.log("Closed browser")
 		if (browser) {
-				await browser.close();
+			await browser.close();
 		}
-		else{
-			data = {Error: "Couldn't start the web browser."}
+		else {
+			data = { Error: "Couldn't start the web browser." }
 		}
 	}
 
 	const json = data
-	console.log({json})
+	console.log({ json })
 	const string = JSON.stringify(data, null, 2)
 	await saveDataToFile(json, 'websiteData.json');
-	return {json, string}
+	return { json, string }
 }
 
-// Example usage:
-const testUrl = "https://www.example.com/"
+const testUrl = 'https://example.com'; // Replace with your target URL
 //const websiteData = await scrapeWebsite(testUrl)
-//console.log({ "websiteData.json": websiteData.json })
 
-const simpleScrape = async () => {
-	const response = await fetch('https://example.com/');
-	const body = await response.text();
-	console.log(body); // prints a chock full of HTML richness
-	return body;
-};
+async function simpleScrape(url) {
+	const username = 'brd-customer-hl_79f94069-zone-unblocker';
+	const password = '4zoph0pu03x3';
+	const port = 22225;
+	const session_id = (1000000 * Math.random()) | 0;
+	const options = {
+		auth: {
+			username: `${username}`,
+			password: password
+		},
+		protocol: 'http',
+		host: 'brd.superproxy.io',
+		port: port,
+		rejectUnauthorized: false
+	};
+
+	// Fetch the HTML content from the URL
+	const response = await axios.get(url, { proxy: options });
+	const html = response.data;
+
+	// Load HTML into Cheerio
+	const $ = cheerio.load(html);
+
+	// Define arrays for heading tags and tags to exclude from scraping
+	const headingTags = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
+	const excludeTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'HEADER', 'FOOTER', 'NAV'];
+	let results = {};
+	let currentHeading = { level: 0, text: '' };
+
+	// Function to clean the text by removing excessive whitespace
+	function cleanText(text) {
+		return text.replace(/\s+/g, ' ').trim();
+	}
+
+	// Function to validate the text (filter out unwanted patterns)
+	function isTextValid(text) {
+		const invalidPatterns = [
+			/{{.*?}}/, /<.*?>/, /\[.*?\]/, /{.*?}/, /function\(.*?\)/, /=>/
+		];
+		return !invalidPatterns.some(pattern => pattern.test(text));
+	}
+
+	// Iterate over all elements on the page
+	$('*').each((_, el) => {
+		let textContent = $(el).text() || '';
+		textContent = cleanText(textContent);
+
+		// Check if the current element is a heading
+		if (headingTags.includes(el.tagName.toUpperCase())) {
+			currentHeading = { level: parseInt(el.tagName[1]), text: textContent };
+			results[currentHeading.text] = '';
+		} else if (
+			!excludeTags.includes(el.tagName.toUpperCase()) && textContent && currentHeading.level > 0 && isTextValid(textContent)
+		) {
+			if (!results[currentHeading.text].includes(textContent)) {
+				results[currentHeading.text] += (results[currentHeading.text] ? '\n' : '') + textContent;
+			}
+		}
+	});
+
+	return { json: results, string: JSON.stringify(results, null, 2) }
+}
+const scrapeResult = await simpleScrape(testUrl)
+console.log({scrapeResult: scrapeResult.json})
 
 
 async function saveDataToFile(data, filename) {
@@ -250,3 +308,6 @@ async function saveDataToFile(data, filename) {
 		console.error(err);
 	}
 }
+
+
+

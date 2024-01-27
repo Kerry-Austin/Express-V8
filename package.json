@@ -14,9 +14,10 @@
   "dependencies": {
     "@types/node": "^18.0.6",
     "ai": "^2.2.31",
-    "axios": "^1.6.5",
+    "axios": "^1.6.7",
     "axios-https-proxy-fix": "^0.17.1",
     "best-effort-json-parser": "^1.0.1",
+    "cheerio": "^1.0.0-rc.12",
     "compromise": "^14.11.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",

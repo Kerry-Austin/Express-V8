@@ -109,6 +109,12 @@ const createNewReadable = () => new Readable({ read() { } });
 io.on('connection', async (socket) => {
 	console.log('io.on(connection) -> New socket connected!');
 	socket.emit("severData", { whisperAPI: process.env['apiKeyV2'] })
+	
+	socket.on('ServerToServer', (msg) => {
+		console.log(`***Server responded to itself***`);
+	});
+	
+	
 	//console.log("io.on(connection) -> ALL SOCKETS:")
 	//console.log(Object.keys(io.sockets.sockets));
 
@@ -184,9 +190,7 @@ io.on('connection', async (socket) => {
 	
 
 
-	socket.on('ServerToServer', (msg) => {
-		console.log(`***Server responded to itself***`);
-	});
+	
 
 	socket.on('error', (error) => {
 		console.log(`Socket Error: ${error}`);
