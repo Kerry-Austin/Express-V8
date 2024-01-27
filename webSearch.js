@@ -32,14 +32,23 @@ export async function searchGoogle(searchQuery) {
 			process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 			// brigthData's serpAPI
-			const response = await axios.get(`http://www.google.com/search?q=${encodeURIComponent(searchString)}` + `&brd_json=1`, { proxy: options });
-			const results = response.data.organic
+			const response = await axios.get('https://app.scrapingbee.com/api/v1/store/google', {
+					params: {
+							'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
+
+							'search': `${searchString}`,
+							'language': 'en',
+							'nb_results': '20', 
+					} 
+			})
+			const results = response.data.organic_results
+			//console.log({results})
 
 			const linksAndInfo = results.map(result => {
 				return {
-					"Page Title": result.title,
-					"Page description": result.description || "No description was given! :(",
-					"Link": result.link
+					"Page_Title": result.title,
+					"Page_Description": result.description || "No description was given.",
+					"Link": result.url
 				}
 			})
 
@@ -47,12 +56,13 @@ export async function searchGoogle(searchQuery) {
 			return linksAndInfo
 		}
 		catch (error) {
-			console.error(error);
+			console.error("Google search failed.")
+			console.error({error});
 		}
 	}
 
 	const searchResults = await getResults(searchQuery)
-	const topFive = searchResults.slice(0, 5)
+	const topFive = searchResults?.slice(0, 5) || ["Google Search Failed."]
 	console.log({ topFive })
 	return topFive
 }
@@ -231,17 +241,18 @@ export async function scrapeWebsite(url) {
 const testUrl = 'https://example.com'; // Replace with your target URL
 //const websiteData = await scrapeWebsite(testUrl)
 
-async function simpleScrape(url) {
+export async function simpleScrape(url) {
 	console.log("simpleScrape()...")
-	
+
 	// Fetch the HTML content from the URL
-	console.log("going to url...")
+	console.log(`going to ${url}...`)
+	try{
 	const response = await axios.get('https://app.scrapingbee.com/api/v1/', {
-			params: {
-					'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
-					'url': 'https://example.com/', 
-					'block_ads': 'true', 
-			} 
+		params: {
+			'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
+			'url': `${url}`,
+			'block_ads': 'true',
+		}
 	})
 	const html = response.data;
 	console.log("got data!")
@@ -286,11 +297,18 @@ async function simpleScrape(url) {
 			}
 		}
 	});
-console.log("Returning results")
+	console.log("Returning results")
+	await saveDataToFile(results, "websiteData.json")
 	return { json: results, string: JSON.stringify(results, null, 2) }
+	}
+	catch(error){
+		console.log("webscrape failed", {error})
+		return {json: "Webscraping isn't working right now", string: "Webscraping isn't working right now."}
+	
+	}
 }
-const scrapeResult = await simpleScrape(testUrl)
-console.log({scrapeResult: scrapeResult.json})
+//const scrapeResult = await simpleScrape(testUrl)
+//console.log({scrapeResult: scrapeResult.json})
 
 
 async function saveDataToFile(data, filename) {
@@ -301,7 +319,7 @@ async function saveDataToFile(data, filename) {
 		console.log("JSON file has been saved.");
 	} catch (err) {
 		console.log("An error occurred while writing JSON Object to File.");
-		console.error(err);
+		//console.error(err);
 	}
 }
 

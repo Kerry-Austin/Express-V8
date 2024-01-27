@@ -19,7 +19,7 @@ import { jsonrepair } from 'jsonrepair'
 import fetch from 'node-fetch';
 import { Readable } from 'stream';
 import { parse } from 'best-effort-json-parser' // double import (from index.js)
-import { searchGoogle, askWolfram, scrapeWebsite } from './webSearch.js';
+import { simpleScrape, searchGoogle, askWolfram, scrapeWebsite } from './webSearch.js';
 import { LogExamples } from "./examplePrompts.js"
 
 
@@ -602,7 +602,7 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "WebpageScraper",
-					"description": "Scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage.",
+					"description": "Scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage. Be sure to provide the objective so the web scraper knows what to look for or what to do.",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -618,7 +618,25 @@ export class Sidekick {
 						"required": ["url", "objective"]
 					}
 				}
-			}
+			},
+			// Search Google
+			{
+				"type": "function",
+				"function": {
+					"name": "Search_Online",
+					"description": "Performs a google search, clicks on the best result, and summarizes the page.",
+					"parameters": {
+						"type": "object",
+						"properties": {
+							"search_query": {
+								"type": "string",
+								"description": "The search query that will be entered into the search bar."
+							}
+						},
+						"required": ["search_query"]
+					}
+				}
+			},
 
 
 
@@ -1261,20 +1279,31 @@ export class Sidekick {
 				},
 
 				ListFeatures: async (input) => {
-					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set alarms, reminders, or properly browse the internet. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Some tools, like the "Finish" tool, are internal and shouldn't be shared with the user."`
+					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set reminders. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Tool names for for inernal use, ensure not to share the actual tool name with the user. In addition to the tools available, you can do everything ChatGPT can do (brainstrom, keep track of lists, etc)."`
 					return featureList
 				},
 				WebpageScraper: async (input) => {
+					console.log({input})
 					const url = input.url
 					const objective = input.objective
 					console.log({objective})
-					const websiteData = await scrapeWebsite(url)
+					const websiteData = await simpleScrape(url)
 					const websiteDataString = websiteData.string
 					const instructions = `You are an expert web scraper. Your job is to extract all of the useful and relevant information from the web page, and provide specific infromation in full markdown format. Use headings, bullet points and various other markdown elements.\n\n Include all of the relevant details in the markdown because the user can't access the page themselves and the page will only be accessed this one time. \n\nThe user's current objective: ${objective}\n\n*** Remember to include all of the relevant details, as the web page won't get acccesd again. The output shouold be mostly headings and bullet points.***`
 					const fakeHistory = [{role: "assistant", content: `Website data:\n\n${websiteDataString}`}]
 					const pageSummary = await agentCore(instructions, fakeHistory, apiConfig, [])
 					//console.log({pageSummary})
 					return pageSummary.content
+				},
+				Search_Online: async (input) => {
+					console.log("Search_Online()")
+					const search_query = input.search_query
+					console.log({search_query})
+					const searchResults = await searchGoogle(search_query)
+					const topResult = searchResults[0]
+					console.log({topResult})
+					const pageInfo = await actionSelector.WebpageScraper({url: topResult.Link})
+					return pageInfo
 				}
 
 			}
