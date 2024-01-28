@@ -597,12 +597,13 @@ export class Sidekick {
 					}
 				}
 			},
+
 			// Scrape webpage
 			{
 				"type": "function",
 				"function": {
-					"name": "WebpageScraper",
-					"description": "Scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage. Be sure to provide the objective so the web scraper knows what to look for or what to do.",
+					"name": "Go_To_Given_Url",
+					"description": "*** For internal use only. Ensure to only call this if given a url by the user. *** Navigates to a url and scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage. Be sure to provide the objective so the web scraper knows what to look for or what to do. *** For internal use only. Ensure to only call this if given a url by the user. *** ",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -619,6 +620,7 @@ export class Sidekick {
 					}
 				}
 			},
+
 			// Search Google
 			{
 				"type": "function",
@@ -769,7 +771,7 @@ export class Sidekick {
 			})
 		}
 
-		const loadingScreenInstructions = `The text unde a progress bar in a loading screen. The message is written in the first person perspective about what the the assistant is currently thinking about. Instead of using "the user", address it directly to them instead by using "you".\n***The loading message must include begin with "I" and should include the word "you"***.`
+		const loadingScreenInstructions = `The text under a progress bar in a loading screen. The message is written in the first person perspective about what the the assistant is currently thinking about. Instead of using "the user", address it directly to them instead by using "you".\n***The loading message must include begin with "I" and should include the word "you". It is filler text,  as if the assistant was speaking aloud to the user. ***.`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -1265,7 +1267,7 @@ export class Sidekick {
 			//const response = {response: respondingResponse.arguments.finalResponse}
 			//return response
 		}
-		async function resultMaker(name, inputs) {
+		async function resultMaker(name, inputs, socket) {
 			console.log("resultMaker()")
 			// actionSelector object
 			let resultString
@@ -1282,15 +1284,15 @@ export class Sidekick {
 					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set reminders. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Tool names for for inernal use, ensure not to share the actual tool name with the user. In addition to the tools available, you can do everything ChatGPT can do (brainstrom, keep track of lists, etc)."`
 					return featureList
 				},
-				WebpageScraper: async (input) => {
-					console.log({input})
+				Go_To_Given_Url: async (input) => {
+					console.log({ input })
 					const url = input.url
 					const objective = input.objective
-					console.log({objective})
+					console.log({ objective })
 					const websiteData = await simpleScrape(url)
 					const websiteDataString = websiteData.string
 					const instructions = `You are an expert web scraper. Your job is to extract all of the useful and relevant information from the web page, and provide specific infromation in full markdown format. Use headings, bullet points and various other markdown elements.\n\n Include all of the relevant details in the markdown because the user can't access the page themselves and the page will only be accessed this one time. \n\nThe user's current objective: ${objective}\n\n*** Remember to include all of the relevant details, as the web page won't get acccesd again. The output shouold be mostly headings and bullet points.***`
-					const fakeHistory = [{role: "assistant", content: `Website data:\n\n${websiteDataString}`}]
+					const fakeHistory = [{ role: "assistant", content: `Website data:\n\n${websiteDataString}` }]
 					const pageSummary = await agentCore(instructions, fakeHistory, apiConfig, [])
 					//console.log({pageSummary})
 					return pageSummary.content
@@ -1298,11 +1300,49 @@ export class Sidekick {
 				Search_Online: async (input) => {
 					console.log("Search_Online()")
 					const search_query = input.search_query
-					console.log({search_query})
+					console.log({ search_query })
 					const searchResults = await searchGoogle(search_query)
-					const topResult = searchResults[0]
-					console.log({topResult})
-					const pageInfo = await actionSelector.WebpageScraper({url: topResult.Link})
+					const chooseBestLink = async (searchResultsList, searchQueryString) => {
+						const resultString = JSON.stringify(searchResultsList, null, 2)
+						const resultMessageHistory = [{ role: "assistant", content: `Results from a web search for "${searchQueryString}":\n\n${resultString}` }]
+						const bestLinkTool = [{
+							"type": "function",
+							"function": {
+								"name": "Go_To_Best_Link",
+								"description": "Formalizes the decision to visit a specific URL based on the agent's analysis. This tool captures the selected link and the reasoning behind choosing it, structuring the output of the agent's decision-making process.",
+								"parameters": {
+									"type": "object",
+									"properties": {
+										"selectedLink": {
+											"type": "string",
+											"description": "The URL that the agent has chosen to visit."
+										},
+										"reasoning": {
+											"type": "string",
+											"description": "The rationale behind choosing this specific link."
+										},
+										"loadingScreenMessage": {
+											"type": "string",
+											"description": `${loadingScreenInstructions}`
+										}
+									},
+									"required": ["selectedLink", "reasoning", "loadingScreenMessage"]
+								}
+							}
+						}
+						]
+						const agentCommand = `Analyze the search results and select the most appropriate one. 
+  Evaluate each link based on relevance to the query, source credibility, content accuracy, and up-to-date information.
+  Provide the chosen URL and the reasoning behind its selection, ensuring it aligns with the user's needs.`
+						const agentResponse = await agentCore(agentCommand, resultMessageHistory, apiConfig, bestLinkTool)
+						console.log({"Link selecting agent": agentResponse.arguments})
+						socket.emit("progressMessage", { message: `${agentResponse.arguments.loadingScreenMessage}` })
+						const bestLink = agentResponse.arguments.selectedLink
+						return bestLink
+					}
+					const bestLink = await chooseBestLink(searchResults, search_query)
+					console.log({ bestLink })
+					const pageInfo = await actionSelector.Go_To_Given_Url({ url: bestLink })
 					return pageInfo
 				}
 
@@ -1343,8 +1383,8 @@ export class Sidekick {
 							},*/
 							"decision": {
 								"type": "string",
-								"enum": ["thinkSomeMore", "respondToUser"],
-								"description": "The decision to either continue or stop the thought process. The user will only get recieve a response once the thought process has been stopped."
+								"enum": ["thinkSomeMore", "respondToUser", "giveUp"],
+								"description": "The decision to either continue or stop the thought process. The user will only get recieve a response once the thought process has been stopped. Giving up is also an option, if no progress is being made."
 							},
 							"reasoning": {
 								"type": "string",
@@ -1362,7 +1402,7 @@ export class Sidekick {
 				return `${key}: ${value}`
 			}).join(`\n`)
 			const command = `Make a decision on whether to send the final response or to continue the thought process. If it's clear that further thinking and action won't significantly improve the response, then choose to stop. Consider the user's need for a prompt response and avoid unnecessary looping in the thought process.\n\n${LogExamples}\n\nCURRENT THOUGHT PROCESS:\n\n${thoughtProcessLogString}`
-			let useGPT4 = {...apiConfig};
+			let useGPT4 = { ...apiConfig };
 			useGPT4.model = "gpt-4-1106-preview"
 			const response = await agentCore(command, [], useGPT4, stoppingTool)
 			console.log({ "STOPPING AGENT RESPONSE": response })
@@ -1419,7 +1459,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 			return thoughtProcess
 		}
 
-		async function testing123abc() {
+		async function testing123abc(socket) {
 			let loopCounter = 0
 			let thoughtProcess = await createFirstObservation(messageHistory, lastUserMessage)
 			//showClientThoughtProcess("I'm thinking of an initial response.")
@@ -1443,7 +1483,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 				showClientThoughtProcess(action_loadingScreenMessage)
 
 				// Provide Result
-				const resultResponse = await resultMaker(actionName, actionInputs)
+				const resultResponse = await resultMaker(actionName, actionInputs, socket)
 				thoughtProcess.push(resultResponse.step)
 				//const resultsIncluded = [...thoughtProcess, resultResponse.step]
 				console.log({ "RESULT": resultResponse.step })
@@ -1468,11 +1508,10 @@ The knowledge base is a valuable resource for providing personalized and relevan
 			return thoughtProcess
 		}
 
-		const finalThoughtProcess = await testing123abc()
+		const finalThoughtProcess = await testing123abc(this.socket)
 		const stream = await respondingAgent(finalThoughtProcess)
 		//await noteTaker()
 		this.socket.emit("progressMessage", { message: "" })
-		this.socket.emit("ServerToServer", { message: "SERVER TEST #1"})
 		return stream
 	}
 
