@@ -566,13 +566,13 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "Retrieve_External_Fact",
-					"description": "This tool is specifically for fetching factual data from external sources like Wolfram Alpha. Ideal for queries about weather, calculations, science data, etc. Not for self-referential queries about the AI's capabilities.",
+					"description": "This tool is specifically for fetching factual data from Wolfram Alpha. Ideal for queries about weather, calculations, science data, etc. Not for self-referential queries about the AI's capabilities. *** Ensure to provide a specific query. Reword what the user said if necessary ***",
 					"parameters": {
 						"type": "object",
 						"properties": {
 							"question": {
 								"type": "string",
-								"description": "The factual question to be externally retrieved."
+								"description": "The specific factual question to be externally retrieved."
 							}
 						},
 						"required": ["question"]
@@ -771,7 +771,8 @@ export class Sidekick {
 			})
 		}
 
-		const loadingScreenInstructions = `The text under a progress bar in a loading screen. The message is written in the first person perspective about what the the assistant is currently thinking about. Instead of using "the user", address it directly to them instead by using "you".\n***The loading message must include begin with "I" and should include the word "you". It is filler text,  as if the assistant was speaking aloud to the user. ***.`
+		const loadingScreenFunctionName = "sayThoughtsAloud"
+		const loadingScreenInstructions = `This is the text under a progress bar in a loading screen. The message is written in the first person perspective about what the the assistant is currently thinking about. Instead of using "the user", address it directly to them instead by using "you".\n***The loading message must include begin with "I" and should include the word "you". It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user. ***.`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -1107,12 +1108,12 @@ export class Sidekick {
 								"type": "string",
 								"description": "The next logical thought or step in the process."
 							},
-							"loadingScreenMessage": {
+							[loadingScreenFunctionName]: {
 								"type": "string",
 								"description": `${loadingScreenInstructions}`
 							}
 						},
-						"required": ["latestObservation", "nextThought", "loadingScreenMessage"]
+						"required": ["latestObservation", "nextThought", loadingScreenFunctionName]
 					}
 
 				}
@@ -1123,7 +1124,7 @@ export class Sidekick {
 			const thinkingResponse = await agentCore(instructions, messageHistory, apiConfig, thinkingTool)
 			console.log({ "Thinking agent's response": thinkingResponse.arguments })
 			const thought = { thought: thinkingResponse.arguments.nextThought }
-			return { step: thought, thinking_loadingScreenMessage: thinkingResponse.arguments.loadingScreenMessage }
+			return { step: thought, thinking_loadingScreenMessage: thinkingResponse.arguments[loadingScreenFunctionName] }
 		}
 		async function actingAgent(thoughtProcess) {
 			const actingTool = [{
@@ -1147,12 +1148,12 @@ export class Sidekick {
 								"type": "string",
 								"description": `The reasoning for selecting this particular tool over the other tools available.`
 							},
-							"loadingScreenMessage": {
+							[loadingScreenFunctionName]: {
 								"type": "string",
 								"description": `${loadingScreenInstructions}`
 							}
 						},
-						"required": ["latestThought", "action", "reasoning", "loadingScreenMessage"]
+						"required": ["latestThought", "action", "reasoning", loadingScreenFunctionName]
 					}
 				}
 			}
@@ -1168,8 +1169,9 @@ export class Sidekick {
 				const actionName = actingResponseForName.arguments.action
 				const actionReasoning = actingResponseForName.arguments.reasoning
 
-				return { actionName, actionReasoning, action_loadingScreenMessage: action.loadingScreenMessage }
+				return { actionName, actionReasoning, action_loadingScreenMessage: action[loadingScreenFunctionName]}
 			}
+			// action_loadingScreenMessage = action[loadingScreenFunctionName]
 			const { actionName, actionReasoning, action_loadingScreenMessage } = await getActionName()
 
 			async function getActionInput(toolName) {
@@ -1208,12 +1210,12 @@ export class Sidekick {
 								"type": "string",
 								"description": "The observation to be recorded in the Thought Process Log."
 							},
-							"loadingScreenMessage": {
+							[loadingScreenFunctionName]: {
 								"type": "string",
 								"description": `${loadingScreenInstructions}`
 							}
 						},
-						"required": ["actionResult", "observation", "loadingScreenMessage"]
+						"required": ["actionResult", "observation", loadingScreenFunctionName]
 					}
 				}
 			}
@@ -1223,7 +1225,7 @@ export class Sidekick {
 			const observingResponse = await agentCore(instructions, messageHistory, apiConfig, observingTool)
 			console.log({ "Observing agent's response": observingResponse.arguments })
 			const observation = { observation: observingResponse.arguments.observation }
-			return { step: observation, observation_loadingScreenMessage: observingResponse.arguments.loadingScreenMessage }
+			return { step: observation, observation_loadingScreenMessage: observingResponse.arguments[loadingScreenFunctionName] }
 		}
 		async function respondingAgent(thoughtProcess) {
 			const respondingTool = [{
@@ -1301,6 +1303,7 @@ export class Sidekick {
 					console.log("Search_Online()")
 					const search_query = input.search_query
 					console.log({ search_query })
+					socket.emit("progressMessage", { message: `I'm searching google for ${search_query}...` })
 					const searchResults = await searchGoogle(search_query)
 					const chooseBestLink = async (searchResultsList, searchQueryString) => {
 						const resultString = JSON.stringify(searchResultsList, null, 2)
@@ -1321,22 +1324,24 @@ export class Sidekick {
 											"type": "string",
 											"description": "The rationale behind choosing this specific link."
 										},
-										"loadingScreenMessage": {
+										[loadingScreenFunctionName]: {
 											"type": "string",
 											"description": `${loadingScreenInstructions}`
 										}
 									},
-									"required": ["selectedLink", "reasoning", "loadingScreenMessage"]
+									"required": ["selectedLink", "reasoning", loadingScreenFunctionName]
 								}
 							}
 						}
 						]
-						const agentCommand = `Analyze the search results and select the most appropriate one. 
+						const agentCommand = `Analyze the search results and select the most appropriate one based on the page title. 
   Evaluate each link based on relevance to the query, source credibility, content accuracy, and up-to-date information.
-  Provide the chosen URL and the reasoning behind its selection, ensuring it aligns with the user's needs.`
+  Provide the chosen URL and the reasoning behind its selection, ensuring it aligns with the user's needs. *** If the selected link has expanded links, consider those as well. ***`
 						const agentResponse = await agentCore(agentCommand, resultMessageHistory, apiConfig, bestLinkTool)
 						console.log({"Link selecting agent": agentResponse.arguments})
-						socket.emit("progressMessage", { message: `${agentResponse.arguments.loadingScreenMessage}` })
+						console.log("TEST #1 ->", loadingScreenFunctionName)
+						console.log("TEST #2 -> ", agentResponse.arguments[loadingScreenFunctionName])
+						socket.emit("progressMessage", { message: `${agentResponse.arguments[loadingScreenFunctionName]}` })
 						const bestLink = agentResponse.arguments.selectedLink
 						return bestLink
 					}

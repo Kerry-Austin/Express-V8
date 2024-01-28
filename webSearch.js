@@ -42,28 +42,39 @@ export async function searchGoogle(searchQuery) {
 					} 
 			})
 			const results = response.data.organic_results
-			//console.log({results})
 
 			const linksAndInfo = results.map(result => {
-				return {
-					"Page_Title": result.title,
-					"Page_Description": result.description || "No description was given.",
-					"Link": result.url
-				}
-			})
+					let topLevelResult = {
+							"Page_Title": result.title,
+							"Page_Description": result.description || "No description was given.",
+							"Link": result.url,
+							"Date": result.date
+					};
 
-			//console.log({"RESULTS": noImages});
+					if (result.sitelinks?.expanded?.length > 0) {
+							topLevelResult.Expanded_Links = result.sitelinks.expanded.map(link => ({
+									"Page_Title": link.title,
+									"Page_Description": link.snippet || "No snippet provided.",
+									"Link": link.link,
+									"Date": link.date
+							}));
+					}
+
+					return topLevelResult;
+			});
+
+
 			return linksAndInfo
 		}
 		catch (error) {
 			console.error("Google search failed.")
-			console.error({error});
+			console.error({"ERROR INFO": error.response});
 		}
 	}
 
 	const searchResults = await getResults(searchQuery)
 	const topFive = searchResults?.slice(0, 5) || ["Google Search Failed."]
-	console.log({ topFive })
+	console.log({"Top 5 Search Results": JSON.stringify(topFive, null, 2)})
 	return topFive
 }
 //await searchGoogle("weather")
