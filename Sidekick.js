@@ -959,7 +959,7 @@ export class Sidekick {
 			const response = await agentCore(command, fakeHistory, apiConfig, [])
 			const updateMessage = response.content
 			console.log({ [tag]: updateMessage })
-			this.socket.emit("progressMessage", { message: `${tag}: ${updateMessage}` })
+			this.socket.emit("progressMessage", { message: `${updateMessage}` })
 			return updateMessage
 		}
 
