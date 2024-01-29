@@ -5,7 +5,7 @@
 		'Because they make up everything!
 */
 
-import {
+import { 
 	getFirestore, collection, doc, addDoc, deleteDoc,
 	updateDoc, getDoc, getDocs, setDoc, query, where, serverTimestamp,
 	arrayUnion, increment
@@ -772,7 +772,7 @@ export class Sidekick {
 		}
 
 		const loadingScreenFunctionName = "sayThoughtsAloud"
-		const loadingScreenInstructions = `This is the text under a progress bar in a loading screen. The message is written in the first person perspective about what the the assistant is currently thinking about. Instead of using "the user", address it directly to them instead by using "you".\n***The loading message must include begin with "I" and should include the word "you". It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user. ***.`
+		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective about what the the assistant is currently doing for the user. Instead of using of words like "the user", it is directly to them instead by using words like "you".\n\nThe loading message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that aree happening now or about to happen, NEVER use the past tense. ***`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -946,6 +946,21 @@ export class Sidekick {
 			//const thoughtProcessString = convertThoughtProcessLogToHtml(thoughtProcess)
 			//this.socket.emit("progressMessage", { message: thoughtProcessString })
 			this.socket.emit("progressMessage", { message: `${progressText}` })
+		}
+		const sendUpdateMessage = async (tag, thoughtProcess) => {
+			if(!tag && !thoughtProcess){
+				this.socket.emit("progressMessage", { message: "" })
+				return
+			}
+			const thoughtProcessString = JSON.stringify(thoughtProcess, null, 2)
+			const fakeHistory = [{role: "assistant", content: `The AI assistant's current thought process:\n\n${thoughtProcessString}`}]
+			const command = `While an AI assistant app thinks in the background, construct a message as if the assistant was thinking aloud. The message must be written in the first person perspective about what the the assistant is currently doing for the user. Instead of using of words like "the user", the message is spoken is directly to them using words like "you".\n\nThe message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that aree happening now or about to happen, NEVER use the past tense. ***`
+
+			const response = await agentCore(command, fakeHistory, apiConfig, [])
+			const updateMessage = response.content
+			console.log({[tag]: updateMessage})
+			this.socket.emit("progressMessage", { message: `${updateMessage}` })
+			return updateMessage
 		}
 
 		async function referenceFunctions() {
@@ -1520,37 +1535,39 @@ The knowledge base is a valuable resource for providing personalized and relevan
 				// Make Thought
 				const thoughtResponse = await thinkingAgent(thoughtProcess)
 				thoughtProcess.push(thoughtResponse.step)
-				console.log({ "THOUGHT": thoughtResponse.thinking_loadingScreenMessage })
-				showClientThoughtProcess(thoughtResponse.thinking_loadingScreenMessage)
+				await sendUpdateMessage("Thought", thoughtProcess)
 
 				// Determine Action
 				const { step, actionName, actionInputs, action_loadingScreenMessage } = await actingAgent(thoughtProcess)
 				console.log({ "ACTION": action_loadingScreenMessage })
 				if (actionName === "Finish") {
+					console.log({thoughtProcess})
 					break
 				}
 				thoughtProcess.push(step)
-				showClientThoughtProcess(action_loadingScreenMessage)
+				await sendUpdateMessage("Action", thoughtProcess)
 
 				// Provide Result
 				const resultResponse = await resultMaker(actionName, actionInputs, socket)
 				thoughtProcess.push(resultResponse.step)
 				//const resultsIncluded = [...thoughtProcess, resultResponse.step]
-				console.log({ "RESULT": resultResponse.step })
+				await sendUpdateMessage("Result", thoughtProcess)
 				//showClientThoughtProcess(thoughtProcess)
 
 				// Observe Result
 				const observationResponse = await observingAgent(thoughtProcess)
-				console.log({ "OBSERVATION": observationResponse.observation_loadingScreenMessage })
 				thoughtProcess.push(observationResponse.step)
-				showClientThoughtProcess(observationResponse.observation_loadingScreenMessage)
+				await sendUpdateMessage("Observation", thoughtProcess)
 
+				console.log({thoughtProcess})
 				// Stopping Agent
+				/*
 				const stopResponse = await stoppingAgent(thoughtProcess)
 				console.log({ thoughtProcess }, { stopResponse })
 				if (stopResponse.decision === "respondToUser") {
 					break
 				}
+				*/
 			}
 
 			//updateKB() // don't wait
@@ -1561,7 +1578,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		const finalThoughtProcess = await testing123abc(this.socket)
 		const stream = await respondingAgent(finalThoughtProcess)
 		//await noteTaker()
-		this.socket.emit("progressMessage", { message: "" })
+		await sendUpdateMessage()
 		return stream
 	}
 
