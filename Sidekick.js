@@ -1302,8 +1302,9 @@ export class Sidekick {
 					console.log("Search_Online()")
 					const search_query = input.search_query
 					console.log({ search_query })
-					socket.emit("progressMessage", { message: `Searching google for "${search_query}"...` })
+					socket.emit("progressMessage", { message: `Searching google for ${search_query}...` })
 					const searchResults = await searchGoogle(search_query)
+					socket.emit("progressMessage", { message: `I'm deciding which links to open...` })
 					const chooseBestLinks = async (searchResultsList, searchQueryString) => {
 						const resultString = JSON.stringify(searchResultsList, null, 2)
 						const resultMessageHistory = [{ role: "assistant", content: `Results from a web search for "${searchQueryString}":\n\n${resultString}` }]
@@ -1358,6 +1359,7 @@ export class Sidekick {
 					console.log({ bestResults })
 					let collectedData = '';
 					for (const result of bestResults) {
+							socket.emit("progressMessage", { message: `Going to ${result.url}...` })
 							const pageInfo = await actionSelector.Go_To_Given_Url({url: result.url});
 							collectedData += `Page source:\n${result.url}\n\nPage Content:\n${pageInfo}\n\n`;
 					}
