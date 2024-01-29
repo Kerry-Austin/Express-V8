@@ -1163,7 +1163,9 @@ export class Sidekick {
 
 			async function getActionName() {
 				console.log("getActionName()")
-				const actingResponseForName = await agentCore(instructions, messageHistory, apiConfig, actingTool)
+				let useGPT4 = { ...apiConfig };
+				useGPT4.model = "gpt-4-1106-preview"
+				const actingResponseForName = await agentCore(instructions, [], useGPT4, actingTool)
 				const action = actingResponseForName.arguments
 				console.log({ action })
 				const actionName = actingResponseForName.arguments.action
@@ -1357,14 +1359,41 @@ export class Sidekick {
 
 					const bestResults = await chooseBestLinks(searchResults, search_query)
 					console.log({ bestResults })
-					let collectedData = '';
-					for (const result of bestResults) {
-							socket.emit("progressMessage", { message: `Going to ${result.url}...` })
-							const pageInfo = await actionSelector.Go_To_Given_Url({url: result.url});
-							collectedData += `Page source:\n${result.url}\n\nPage Content:\n${pageInfo}\n\n`;
-					}
+					async function scrapeMultiplePages(results) {
+							try {
+									// Emit initial progress messages for all URLs
+									
 
-					return collectedData;
+									// Create an array of promises
+									const promises = results.map(result => 
+											actionSelector.Go_To_Given_Url({ url: result.url })
+													.then(pageInfo => ({ url: result.url, pageInfo }))
+													.catch(error => ({ url: result.url, error }))
+									);
+
+									// Use Promise.allSettled to scrape all pages concurrently
+									const scrapedData = await Promise.allSettled(promises);
+
+									// Process the results and build the collected data string
+									let collectedData = '';
+									scrapedData.forEach(result => {
+											if (result.status === 'fulfilled') {
+													collectedData += `Page source:\n${result.value.url}\n\nPage Content:\n${result.value.pageInfo}\n\n`;
+											} else {
+													collectedData += `Error scraping URL ${result.value.url}: ${result.reason}\n\n`;
+											}
+									});
+
+									return collectedData;
+							} catch (error) {
+									// Handle any unexpected errors
+									console.error('Unexpected error:', error);
+									return `Error occurred: ${error}`;
+							}
+					}
+					socket.emit("progressMessage", { message: `I'm reading 3 of the webpages...` })
+					const collectedData = await scrapeMultiplePages(bestResults);
+					return collectedData
 				}
 
 			}
