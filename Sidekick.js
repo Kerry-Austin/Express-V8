@@ -5,7 +5,7 @@
 		'Because they make up everything!
 */
 
-import { 
+import {
 	getFirestore, collection, doc, addDoc, deleteDoc,
 	updateDoc, getDoc, getDocs, setDoc, query, where, serverTimestamp,
 	arrayUnion, increment
@@ -19,7 +19,7 @@ import { jsonrepair } from 'jsonrepair'
 import fetch from 'node-fetch';
 import { Readable } from 'stream';
 import { parse } from 'best-effort-json-parser' // double import (from index.js)
-import { simpleScrape, searchGoogle, askWolfram, scrapeWebsite } from './webSearch.js';
+import { simpleScrape, searchGoogle, askWolfram, scrapeWebsite, scrapeMultiplePages } from './webSearch.js';
 import { LogExamples } from "./examplePrompts.js"
 
 
@@ -772,7 +772,7 @@ export class Sidekick {
 		}
 
 		const loadingScreenFunctionName = "sayThoughtsAloud"
-		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective about what the the assistant is currently doing for the user. Instead of using of words like "the user", it is directly to them instead by using words like "you".\n\nThe loading message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that are happening now or about to happen, NEVER use the past tense. ***`
+		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective. Instead of using of words like "the user", it is addressed directly to them instead by using words like "you".\n\nThe message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that are happening now or about to happen, NEVER use the past tense. ***`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -948,18 +948,18 @@ export class Sidekick {
 			this.socket.emit("progressMessage", { message: `${progressText}` })
 		}
 		const sendUpdateMessage = async (tag, thoughtProcess) => {
-			if(!tag && !thoughtProcess){
+			if (!tag && !thoughtProcess) {
 				this.socket.emit("progressMessage", { message: "" })
 				return
 			}
 			const thoughtProcessString = JSON.stringify(thoughtProcess, null, 2)
-			const fakeHistory = [{role: "assistant", content: `The AI assistant's current thought process:\n\n${thoughtProcessString}`}]
-			const command = `While an AI assistant app thinks in the background, construct a message as if the assistant was thinking aloud. The message must be written in the first person perspective about what the the assistant is currently doing for the user. Instead of using of words like "the user", the message is spoken is directly to them using words like "you".\n\nThe message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that aree happening now or about to happen, NEVER use the past tense. ***`
+			const fakeHistory = [{ role: "assistant", content: `The AI assistant's current thought process:\n\n${thoughtProcessString}` }]
+			const command = `While an AI assistant app thinks in the background, construct a message as if the assistant was thinking aloud. The message must be written in the first person perspective. Instead of using of words like "the user", the message is spoken is directly to them using words like "you".\n\nThe message must include the word "I".\n\n*** It is filler text, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that aree happening now or about to happen, NEVER use the past tense. ***`
 
 			const response = await agentCore(command, fakeHistory, apiConfig, [])
 			const updateMessage = response.content
-			console.log({[tag]: updateMessage})
-			this.socket.emit("progressMessage", { message: `${updateMessage}` })
+			console.log({ [tag]: updateMessage })
+			this.socket.emit("progressMessage", { message: `${tag}: ${updateMessage}` })
 			return updateMessage
 		}
 
@@ -1123,12 +1123,8 @@ export class Sidekick {
 								"type": "string",
 								"description": "The next logical thought or step in the process."
 							},
-							[loadingScreenFunctionName]: {
-								"type": "string",
-								"description": `${loadingScreenInstructions}`
-							}
 						},
-						"required": ["latestObservation", "nextThought", loadingScreenFunctionName]
+						"required": ["latestObservation", "nextThought"]
 					}
 
 				}
@@ -1139,7 +1135,7 @@ export class Sidekick {
 			const thinkingResponse = await agentCore(instructions, messageHistory, apiConfig, thinkingTool)
 			console.log({ "Thinking agent's response": thinkingResponse.arguments })
 			const thought = { thought: thinkingResponse.arguments.nextThought }
-			return { step: thought, thinking_loadingScreenMessage: thinkingResponse.arguments[loadingScreenFunctionName] }
+			return { step: thought }
 		}
 		async function actingAgent(thoughtProcess) {
 			const actingTool = [{
@@ -1163,12 +1159,8 @@ export class Sidekick {
 								"type": "string",
 								"description": `The reasoning for selecting this particular tool over the other tools available.`
 							},
-							[loadingScreenFunctionName]: {
-								"type": "string",
-								"description": `${loadingScreenInstructions}`
-							}
 						},
-						"required": ["latestThought", "action", "reasoning", loadingScreenFunctionName]
+						"required": ["latestThought", "action", "reasoning"]
 					}
 				}
 			}
@@ -1186,10 +1178,9 @@ export class Sidekick {
 				const actionName = actingResponseForName.arguments.action
 				const actionReasoning = actingResponseForName.arguments.reasoning
 
-				return { actionName, actionReasoning, action_loadingScreenMessage: action[loadingScreenFunctionName] }
+				return { actionName, actionReasoning }
 			}
-			// action_loadingScreenMessage = action[loadingScreenFunctionName]
-			const { actionName, actionReasoning, action_loadingScreenMessage } = await getActionName()
+			const { actionName, actionReasoning } = await getActionName()
 
 			async function getActionInput(toolName) {
 				console.log("getActionInput()")
@@ -1208,7 +1199,7 @@ export class Sidekick {
 			console.log({ "Acting agent's response": { actionName, actionInputs, actionReasoning } })
 
 			const step = { action: `[${actionName}] "${inputString}"` }
-			return { step, actionName, actionReasoning, actionInputs, inputString, toolId, action_loadingScreenMessage }
+			return { step, actionName, actionReasoning, actionInputs, inputString, toolId }
 		}
 		async function observingAgent(thoughtProcess) {
 			const observingTool = [{
@@ -1227,10 +1218,6 @@ export class Sidekick {
 								"type": "string",
 								"description": "The observation to be recorded in the Thought Process Log."
 							},
-							[loadingScreenFunctionName]: {
-								"type": "string",
-								"description": `${loadingScreenInstructions}`
-							}
 						},
 						"required": ["actionResult", "observation", loadingScreenFunctionName]
 					}
@@ -1242,7 +1229,7 @@ export class Sidekick {
 			const observingResponse = await agentCore(instructions, messageHistory, apiConfig, observingTool)
 			console.log({ "Observing agent's response": observingResponse.arguments })
 			const observation = { observation: observingResponse.arguments.observation }
-			return { step: observation, observation_loadingScreenMessage: observingResponse.arguments[loadingScreenFunctionName] }
+			return { step: observation }
 		}
 		async function respondingAgent(thoughtProcess) {
 			const respondingTool = [{
@@ -1286,7 +1273,7 @@ export class Sidekick {
 			//const response = {response: respondingResponse.arguments.finalResponse}
 			//return response
 		}
-		async function resultMaker(name, inputs, socket) {
+		async function resultMaker(name, inputs) {
 			console.log("resultMaker()")
 			// actionSelector object
 			let resultString
@@ -1308,23 +1295,38 @@ export class Sidekick {
 					const objective = input.objective
 					console.log({ objective })
 					const websiteData = await simpleScrape(url)
-					const websiteDataString = websiteData.string
 					const instructions = `You are an expert note taker. Your goal is to take detailed and specific notes on all of the useful and relevant information from the web page. Provide the infromation in full markdown format with headings, bullet points and various other markdown elements.\n\n Include all of the relevant details because the user can't access the page themselves and the page will only be accessed this one time everything in the notes should be what the user would know if they read the page themselves. \n\nThe user's current objective: ${objective}\n\n*** The output shouold be mostly headings and bullet points.***`
-					const fakeHistory = [{ role: "assistant", content: `Website data:\n\n${websiteDataString}` }]
-					const pageSummary = await agentCore(instructions, fakeHistory, apiConfig, [])
-					//console.log({pageSummary})
-					return pageSummary.content
+					const fakeHistory = [{ role: "assistant", content: `Website data:\n\n${websiteData}` }]
+					const agentResponse = await agentCore(instructions, fakeHistory, apiConfig, [])
+					return `Website source: ${url}\n\n${agentResponse.content}`
+				},
+				SummarizePage: async (input) => {
+					console.log("SummarizePage()...")
+					const dataPoint = input.dataPoint
+					const search_query = input.search_query
+					//sendUpdateMessage("Web Summary", {Action: `Currently reading this web page: "${dataPoint.searchResult.Page_Title}" to answer the search query: "${search_query}". I should tell the user to give me a quick sec.`})
+					//console.log({SUMMARY_URL: dataPoint.searchResult.url})
+					const instructions = `You are an expert note taker. Your goal is to take detailed and specific notes on all of the useful and relevant information from the web page. Provide the infromation in full markdown format with headings, bullet points and various other markdown elements.\n\n Include all of the relevant details because the user can't access the page themselves. The page will only be accessed this one time, so everything in the notes should be what the user would know if they read the page themselves.\n\nThe user's latest search query: ${search_query}\n\n*** The output shouold be mostly headings and bullet points include the source url (${dataPoint.searchResult.url}) in markdown format.***`
+					//console.log({INSTUCTIONS: instructions})
+					const fakeHistory = [{ role: "assistant", content: `Website data:\n\n${dataPoint.websiteData}` }]
+					const agentResponse = await agentCore(instructions, fakeHistory, apiConfig, [])
+					console.log({ "SUMMARY": agentResponse.content })
+					return agentResponse.content
 				},
 				Search_Google: async (input) => {
 					console.log("Search_Online()")
 					const search_query = input.search_query
 					console.log({ search_query })
-					socket.emit("progressMessage", { message: `Searching google for ${search_query}...` })
+					sendUpdateMessage("Google Search start", { Thought: `I'm searching google for "${search_query}"` })
 					const searchResults = await searchGoogle(search_query)
-					socket.emit("progressMessage", { message: `I'm deciding which links to open...` })
 					const chooseBestLinks = async (searchResultsList, searchQueryString) => {
 						const resultString = JSON.stringify(searchResultsList, null, 2)
 						const resultMessageHistory = [{ role: "assistant", content: `Results from a web search for "${searchQueryString}":\n\n${resultString}` }]
+						sendUpdateMessage("Google Search Finished",
+							[{ Thought: `I got these results from a google search for "${search_query}"` }, 
+							 { Next_Action: "Picking the best results to read." }, 
+							 { Thought: "Looking at the search results, I should provide an answer based on those, while I read the web pages." }])
+
 						const bestLinksTool = [
 							{
 								"type": "function",
@@ -1365,52 +1367,59 @@ export class Sidekick {
 						const agentCommand = `Analyze the search results and select the top three most appropriate links based on page title and content relevance. Evaluate each link based on relevance to the query, source credibility, content accuracy, and up-to-date information.\n\nProvide an array of the chosen URLs, each accompanied by reasoning behind its selection, ensuring each choice aligns with the user's needs. Consider expanded links in your selection if available.`;
 
 						const agentResponse = await agentCore(agentCommand, resultMessageHistory, apiConfig, bestLinksTool)
-						console.log({ "Link selecting agent": agentResponse.arguments })
-						socket.emit("progressMessage", { message: `${agentResponse.arguments[loadingScreenFunctionName]}` })
+						console.log({ "Link selected via agent": agentResponse.arguments.selectedLinks })
 						const bestLinks = agentResponse.arguments.selectedLinks
 						return bestLinks
 					}
+					const summarizeCollectedData = async (collectedData, search_query) => {
+						console.log('Starting summarization of collected data.');
 
+						// Create an array of promises for summarization tasks
+						const summarizationPromises = collectedData.map(async (dataPoint, index) => {
+							console.log(`Starting summarization for URL #${index + 1}: ${dataPoint.searchResult.url}...`);
+							console.log({ dataPoint })
+							try { // Try Summarize page
+								const summary = await actionSelector.SummarizePage({ dataPoint, search_query });
+								console.log({ summary })
+								return summary
+							}
+							catch (error) {
+								console.error(`Error summarizing data for ${dataPoint.searchResult.url}`, error)
+								return { url: dataPoint.searchResult.url, error }; // Return error with URL
+							}
+						});
+
+						console.log('Initiated all summarization tasks.');
+
+						// Wait for all summarization tasks to complete
+						const pageSummaries = await Promise.allSettled(summarizationPromises);
+
+						console.log('All summarization tasks completed.');
+
+						// Process and return the summaries
+						const processedSummaries = pageSummaries.map((result, index) => {
+							if (result.status === 'fulfilled') {
+								console.log(`Processing successful summary for URL #${index + 1}`);
+								return result.value;
+							} else {
+								console.warn(`Processing failed summary for URL #${index + 1}`);
+								// Handle error cases or return a default value
+								return { error: result.reason };
+							}
+						});
+
+						return processedSummaries;
+					}
 
 					const bestResults = await chooseBestLinks(searchResults, search_query)
-					console.log({ bestResults })
-					async function scrapeMultiplePages(results) {
-							try {
-									// Emit initial progress messages for all URLs
-									
+					const collectedData = await scrapeMultiplePages(bestResults, sendUpdateMessage)
+					const summaries = await summarizeCollectedData(collectedData, search_query)
 
-									// Create an array of promises
-									const promises = results.map(result => 
-											actionSelector.Go_To_Given_Url({ url: result.url })
-													.then(pageInfo => ({ url: result.url, pageInfo }))
-													.catch(error => ({ url: result.url, error }))
-									);
+					console.log({ summaries })
+					return JSON.stringify(summaries, null, 2)
 
-									// Use Promise.allSettled to scrape all pages concurrently
-									const scrapedData = await Promise.allSettled(promises);
-
-									// Process the results and build the collected data string
-									let collectedData = '';
-									scrapedData.forEach(result => {
-											if (result.status === 'fulfilled') {
-													collectedData += `Page source:\n${result.value.url}\n\nPage Content:\n${result.value.pageInfo}\n\n`;
-											} else {
-													collectedData += `Error scraping URL ${result.value.url}: ${result.reason}\n\n`;
-											}
-									});
-
-									return collectedData;
-							} catch (error) {
-									// Handle any unexpected errors
-									console.error('Unexpected error:', error);
-									return `Error occurred: ${error}`;
-							}
-					}
-					socket.emit("progressMessage", { message: `I'm reading 3 of the webpages...` })
-					const collectedData = await scrapeMultiplePages(bestResults);
-					return collectedData
+					//return `Web page reading is still being worked on. Draw a conclusion from the google search result titles instead:\n\n${JSON.stringify(bestResults, null, 2)}`
 				}
-
 			}
 
 			if (actionSelector[name]) {
@@ -1531,6 +1540,9 @@ The knowledge base is a valuable resource for providing personalized and relevan
 
 			while (loopCounter < 4) {
 				loopCounter += 1
+				
+				//socket.emit("bounceBack", {command: "playMessage", payload: "The quick brown fox." })
+				
 
 				// Make Thought
 				const thoughtResponse = await thinkingAgent(thoughtProcess)
@@ -1538,17 +1550,16 @@ The knowledge base is a valuable resource for providing personalized and relevan
 				await sendUpdateMessage("Thought", thoughtProcess)
 
 				// Determine Action
-				const { step, actionName, actionInputs, action_loadingScreenMessage } = await actingAgent(thoughtProcess)
-				console.log({ "ACTION": action_loadingScreenMessage })
+				const { step, actionName, actionInputs } = await actingAgent(thoughtProcess)
 				if (actionName === "Finish") {
-					console.log({thoughtProcess})
+					console.log({ thoughtProcess })
 					break
 				}
 				thoughtProcess.push(step)
 				await sendUpdateMessage("Action", thoughtProcess)
 
 				// Provide Result
-				const resultResponse = await resultMaker(actionName, actionInputs, socket)
+				const resultResponse = await resultMaker(actionName, actionInputs, sendUpdateMessage)
 				thoughtProcess.push(resultResponse.step)
 				//const resultsIncluded = [...thoughtProcess, resultResponse.step]
 				await sendUpdateMessage("Result", thoughtProcess)
@@ -1559,15 +1570,15 @@ The knowledge base is a valuable resource for providing personalized and relevan
 				thoughtProcess.push(observationResponse.step)
 				await sendUpdateMessage("Observation", thoughtProcess)
 
-				console.log({thoughtProcess})
+				console.log({ thoughtProcess })
 				// Stopping Agent
-				/*
+
 				const stopResponse = await stoppingAgent(thoughtProcess)
 				console.log({ thoughtProcess }, { stopResponse })
-				if (stopResponse.decision === "respondToUser") {
+				if (stopResponse.decision === "respondToUser" || stopResponse.decision === "giveUp") {
 					break
 				}
-				*/
+
 			}
 
 			//updateKB() // don't wait

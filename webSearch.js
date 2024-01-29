@@ -33,34 +33,34 @@ export async function searchGoogle(searchQuery) {
 
 			// brigthData's serpAPI
 			const response = await axios.get('https://app.scrapingbee.com/api/v1/store/google', {
-					params: {
-							'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
+				params: {
+					'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
 
-							'search': `${searchString}`,
-							'language': 'en',
-							'nb_results': '20', 
-					} 
+					'search': `${searchString}`,
+					'language': 'en',
+					'nb_results': '20',
+				}
 			})
 			const results = response.data.organic_results
 
 			const linksAndInfo = results.map(result => {
-					let topLevelResult = {
-							"Page_Title": result.title,
-							"Page_Description": result.description || "No description was given.",
-							"Link": result.url,
-							"Date": result.date
-					};
+				let topLevelResult = {
+					"Page_Title": result.title,
+					"Page_Description": result.description || "No description was given.",
+					"Link": result.url,
+					"Date": result.date
+				};
 
-					if (result.sitelinks?.expanded?.length > 0) {
-							topLevelResult.Expanded_Links = result.sitelinks.expanded.map(link => ({
-									"Page_Title": link.title,
-									"Page_Description": link.snippet || "No snippet provided.",
-									"Link": link.link,
-									"Date": link.date
-							}));
-					}
+				if (result.sitelinks?.expanded?.length > 0) {
+					topLevelResult.Expanded_Links = result.sitelinks.expanded.map(link => ({
+						"Page_Title": link.title,
+						"Page_Description": link.snippet || "No snippet provided.",
+						"Link": link.link,
+						"Date": link.date
+					}));
+				}
 
-					return topLevelResult;
+				return topLevelResult;
 			});
 
 
@@ -68,14 +68,14 @@ export async function searchGoogle(searchQuery) {
 		}
 		catch (error) {
 			console.error("Google search failed.")
-			console.error({"ERROR INFO": error.response});
+			console.error({ "ERROR INFO": error.response });
 		}
 	}
 
 	const searchResults = await getResults(searchQuery)
-	const topFive = searchResults?.slice(0, 5) || ["Google Search Failed."]
-	console.log({"Top 5 Search Results": JSON.stringify(topFive, null, 2)})
-	return topFive
+	const topTen = searchResults?.slice(0, 10) || ["Google Search Failed."]
+	console.log({ "Top 10 Search Results": JSON.stringify(topTen.map(result => result.Page_Title), null, 2) })
+	return topTen
 }
 //await searchGoogle("weather")
 
@@ -253,95 +253,116 @@ const testUrl = 'https://example.com'; // Replace with your target URL
 //const websiteData = await scrapeWebsite(testUrl)
 
 export async function simpleScrape(url) {
-	console.log("simpleScrape()...")
+	//console.log("simpleScrape()...")
 
 	// Fetch the HTML content from the URL
-	console.log(`going to ${url}...`)
-	try{
-	const response = await axios.get('https://app.scrapingbee.com/api/v1/', {
-		params: {
-			'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
-			'url': `${url}`,
-			'block_ads': 'true',
-		}
-	})
-	const html = response.data;
-	console.log("got data!")
-
-	// Load HTML into Cheerio
-	const $ = cheerio.load(html);
-
-	// Define arrays for heading tags and tags to exclude from scraping
-	const headingTags = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
-	const excludeTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'HEADER', 'FOOTER', 'NAV'];
-	let results = {};
-	let currentHeading = { level: 0, text: '' };
-
-	// Function to clean the text by removing excessive whitespace
-	function cleanText(text) {
-		return text.replace(/\s+/g, ' ').trim();
-	}
-
-	// Function to validate the text (filter out unwanted patterns)
-	function isTextValid(text) {
-		const invalidPatterns = [
-			/{{.*?}}/, /<.*?>/, /\[.*?\]/, /{.*?}/, /function\(.*?\)/, /=>/
-		];
-		return !invalidPatterns.some(pattern => pattern.test(text));
-	}
-
-	// Iterate over all elements on the page
-	console.log("Organizing page...")
-	$('*').each((_, el) => {
-		let textContent = $(el).text() || '';
-		textContent = cleanText(textContent);
-
-		// Check if the current element is a heading
-		if (headingTags.includes(el.tagName.toUpperCase())) {
-			currentHeading = { level: parseInt(el.tagName[1]), text: textContent };
-			results[currentHeading.text] = '';
-		} else if (
-			!excludeTags.includes(el.tagName.toUpperCase()) && textContent && currentHeading.level > 0 && isTextValid(textContent)
-		) {
-			if (!results[currentHeading.text].includes(textContent)) {
-				results[currentHeading.text] += (results[currentHeading.text] ? '\n' : '') + textContent;
+	//console.log(`going to ${url}...`)
+	try {
+		const response = await axios.get('https://app.scrapingbee.com/api/v1/', {
+			params: {
+				'api_key': 'RJBZ1SD9PGYGAT1T4TVM883X2LHXVVFIIWR4JDVSZN8EAEC9YRFVW62YKPOLA6U2KGL71D2XZH6SSCPQ',
+				'url': `${url}`,
+				'block_ads': 'true',
+				"timeout": "5000"
 			}
+		})
+		const html = response.data;
+		//console.log("got data!")
+
+		// Load HTML into Cheerio
+		const $ = cheerio.load(html);
+
+		// Define arrays for heading tags and tags to exclude from scraping
+		const headingTags = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
+		const excludeTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'HEADER', 'FOOTER', 'NAV'];
+		let results = {};
+		let currentHeading = { level: 0, text: '' };
+
+		// Function to clean the text by removing excessive whitespace
+		function cleanText(text) {
+			return text.replace(/\s+/g, ' ').trim();
 		}
-	});
-	console.log("Returning results")
-	await saveDataToFile(results, "websiteData.json")
-	return { json: results, string: JSON.stringify(results, null, 2) }
+
+		// Function to validate the text (filter out unwanted patterns)
+		function isTextValid(text) {
+			const invalidPatterns = [
+				/{{.*?}}/, /<.*?>/, /\[.*?\]/, /{.*?}/, /function\(.*?\)/, /=>/
+			];
+			return !invalidPatterns.some(pattern => pattern.test(text));
+		}
+
+		// Iterate over all elements on the page
+		//console.log("Organizing page...")
+		$('*').each((_, el) => {
+			let textContent = $(el).text() || '';
+			textContent = cleanText(textContent);
+
+			// Check if the current element is a heading
+			if (headingTags.includes(el.tagName.toUpperCase())) {
+				currentHeading = { level: parseInt(el.tagName[1]), text: textContent };
+				results[currentHeading.text] = '';
+			} else if (
+				!excludeTags.includes(el.tagName.toUpperCase()) && textContent && currentHeading.level > 0 && isTextValid(textContent)
+			) {
+				if (!results[currentHeading.text].includes(textContent)) {
+					results[currentHeading.text] += (results[currentHeading.text] ? '\n' : '') + textContent;
+				}
+			}
+		});
+		//console.log("Returning results")
+		results = {Website_URL: url, ...results}
+		//await saveDataToFile(results, "websiteData.json")
+		return JSON.stringify(results, null, 2)
 	}
-	catch(error){
-		console.log("webscrape failed", {error})
-		return {json: "Webscraping failed for this page.", string: "Webscraping failed for this page."}
-	
+	catch (error) {
+		//console.log("webscrape failed", { error })
+		const results = {Website_URL: url, Error: "Webscrapping failed for this page."}
+		return JSON.stringify(results, null, 2)
 	}
 }
 //const scrapeResult = await simpleScrape(testUrl)
 //console.log({scrapeResult: scrapeResult.json})
 
-export async function scrapeMultiplePages(urls) {
-		try {
-				// Create an array of promises, each using simpleScrape
-				const promises = urls.map(url => simpleScrape(url).catch(error => ({ error })));
+export async function scrapeMultiplePages(searchResults, sendUpdateFunction) {
+	//const urls = searchResults.map(result => result.url)
+	let progressCount = 0
+	try {
+		// Create an array of promises, each using simpleScrape
+		const promises = searchResults.map(result =>
+			simpleScrape(result.url)
+				.then(data => {
+					progressCount += 1
+					//sendUpdateFunction("Web Scrape", {Action: `I've opened ${progressCount}/${searchResults.length} pages so far (${result.url})`})
+					return {searchResult: result, websiteData: data}
+				})
+				.catch(error => {
+					//console.error(`Error scraping ${url}:`, error);
+					return {searchResult: result, websiteData: `Error reading url (${result.url})`}
+				})
+		);
 
-				// Use Promise.allSettled to wait for all to settle
-				const results = await Promise.allSettled(promises);
+		// Use Promise.allSettled to wait for all to settle
+		const results = await Promise.allSettled(promises);
 
-				// Process the results
-				results.forEach((result, index) => {
-						if (result.status === 'fulfilled') {
-								console.log(`Data from URL ${urls[index]}:`, result.value);
-						} else {
-								console.warn(`Error scraping URL ${urls[index]}:`, result.reason);
-						}
-				});
-		}
-		catch (error) {
-				// Handle any unexpected errors
-				console.error('Unexpected error:', error);
-		}
+		// Process the results
+		const finalResults = results.map((result, index) => {
+			if (result.status === 'fulfilled') {
+				return result.value;
+			} else {
+				//console.warn(`Error result for ${searchResults[index].url}:`, result.reason);
+				return { error: result.reason };
+			}
+		});
+
+		console.log('All scraping tasks completed.');
+		//sendUpdateFunction("Web Scrape", {Thought: "All of the web pages have been opened, I'm now about to read them"})
+		console.log({finalResults})
+		return finalResults;
+	} catch (error) {
+		// Handle any unexpected errors
+		console.error('Unexpected error:', error);
+		return []; // Return an empty array in case of unexpected errors
+	}
 }
 //const testUrls = ["http://example.com/"]
 

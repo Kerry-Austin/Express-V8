@@ -325,6 +325,7 @@ io.on('connection', async (socket) => {
 
 	socket.on(`playMessage`, async (data) => {
 		console.log('socket.on(playMessage)');
+		console.log({data})
 		socket.emit("progressMessage", { message: "REQUESTING AUDIO" })
 		resetAudioState()
 		const sentMessageContent = data.payload
