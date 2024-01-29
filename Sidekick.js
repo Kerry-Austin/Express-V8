@@ -772,7 +772,7 @@ export class Sidekick {
 		}
 
 		const loadingScreenFunctionName = "sayThoughtsAloud"
-		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective about what the the assistant is currently doing for the user. Instead of using of words like "the user", it is directly to them instead by using words like "you".\n\nThe loading message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that aree happening now or about to happen, NEVER use the past tense. ***`
+		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective about what the the assistant is currently doing for the user. Instead of using of words like "the user", it is directly to them instead by using words like "you".\n\nThe loading message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that are happening now or about to happen, NEVER use the past tense. ***`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
