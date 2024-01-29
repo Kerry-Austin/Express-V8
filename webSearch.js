@@ -314,12 +314,38 @@ export async function simpleScrape(url) {
 	}
 	catch(error){
 		console.log("webscrape failed", {error})
-		return {json: "Webscraping isn't working right now", string: "Webscraping isn't working right now."}
+		return {json: "Webscraping failed for this page.", string: "Webscraping failed for this page."}
 	
 	}
 }
 //const scrapeResult = await simpleScrape(testUrl)
 //console.log({scrapeResult: scrapeResult.json})
+
+export async function scrapeMultiplePages(urls) {
+		try {
+				// Create an array of promises, each using simpleScrape
+				const promises = urls.map(url => simpleScrape(url).catch(error => ({ error })));
+
+				// Use Promise.allSettled to wait for all to settle
+				const results = await Promise.allSettled(promises);
+
+				// Process the results
+				results.forEach((result, index) => {
+						if (result.status === 'fulfilled') {
+								console.log(`Data from URL ${urls[index]}:`, result.value);
+						} else {
+								console.warn(`Error scraping URL ${urls[index]}:`, result.reason);
+						}
+				});
+		}
+		catch (error) {
+				// Handle any unexpected errors
+				console.error('Unexpected error:', error);
+		}
+}
+//const testUrls = ["http://example.com/"]
+
+//await scrapeMultiplePages(testUrls)
 
 
 async function saveDataToFile(data, filename) {

@@ -565,8 +565,8 @@ export class Sidekick {
 			{
 				"type": "function",
 				"function": {
-					"name": "Retrieve_External_Fact",
-					"description": "This tool is specifically for fetching factual data from Wolfram Alpha. Ideal for queries about weather, calculations, science data, etc. Not for self-referential queries about the AI's capabilities. *** Ensure to provide a specific query. Reword what the user said if necessary ***",
+					"name": "Query_Wolfram_Alpha",
+					"description": "This tool is specifically for fetching factual data from Wolfram Alpha. Ideal for queries about weather, calculations, science data, etc. Not for self-referential queries about the AI's capabilities. Not for web searches. *** Ensure to provide a specific query. Reword what the user said if necessary ***",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -583,8 +583,8 @@ export class Sidekick {
 			{
 				"type": "function",
 				"function": {
-					"name": "ListFeatures",
-					"description": "Use this tool for answering questions about the AI assistant's own capabilities and functions. It accesses the internal knowledge base to provide a list or explanation of what the AI can do. Not for external data retrieval.",
+					"name": "List_Features",
+					"description": "Use this tool for answering questions about the your own capabilities and functions. It accesses the internal knowledge base to provide a list or explanation of what the AI can do. Not for external data retrieval.",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -603,7 +603,7 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "Go_To_Given_Url",
-					"description": "*** For internal use only. Ensure to only call this if given a url by the user. *** Navigates to a url and scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage. Be sure to provide the objective so the web scraper knows what to look for or what to do. *** For internal use only. Ensure to only call this if given a url by the user. *** ",
+					"description": "Navigates to a url and scrapes content from a specified webpage, guided by a provided objective. This tool adapts to different scraping requirements, such as extracting specific data, summarizing content, or finding answers to queries within the webpage. Be sure to provide the objective so the web scraper knows what to look for or what to do. *** Ensure to only call this if a url was given by the user. *** ",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -625,7 +625,7 @@ export class Sidekick {
 			{
 				"type": "function",
 				"function": {
-					"name": "Search_Online",
+					"name": "Search_Google",
 					"description": "Performs a google search, clicks on the best result, and summarizes the page.",
 					"parameters": {
 						"type": "object",
@@ -1169,7 +1169,7 @@ export class Sidekick {
 				const actionName = actingResponseForName.arguments.action
 				const actionReasoning = actingResponseForName.arguments.reasoning
 
-				return { actionName, actionReasoning, action_loadingScreenMessage: action[loadingScreenFunctionName]}
+				return { actionName, actionReasoning, action_loadingScreenMessage: action[loadingScreenFunctionName] }
 			}
 			// action_loadingScreenMessage = action[loadingScreenFunctionName]
 			const { actionName, actionReasoning, action_loadingScreenMessage } = await getActionName()
@@ -1276,13 +1276,12 @@ export class Sidekick {
 			let resultHtml = ""
 			let step = {}
 			const actionSelector = {
-				Retrieve_External_Fact: async (input) => {
+				Query_Wolfram_Alpha: async (input) => {
 					const query = input.question
 					const wolframAnswer = await askWolfram(query)
 					return wolframAnswer
 				},
-
-				ListFeatures: async (input) => {
+				List_Features: async (input) => {
 					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set reminders. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Tool names for for inernal use, ensure not to share the actual tool name with the user. In addition to the tools available, you can do everything ChatGPT can do (brainstrom, keep track of lists, etc)."`
 					return featureList
 				},
@@ -1293,62 +1292,77 @@ export class Sidekick {
 					console.log({ objective })
 					const websiteData = await simpleScrape(url)
 					const websiteDataString = websiteData.string
-					const instructions = `You are an expert web scraper. Your job is to extract all of the useful and relevant information from the web page, and provide specific infromation in full markdown format. Use headings, bullet points and various other markdown elements.\n\n Include all of the relevant details in the markdown because the user can't access the page themselves and the page will only be accessed this one time. \n\nThe user's current objective: ${objective}\n\n*** Remember to include all of the relevant details, as the web page won't get acccesd again. The output shouold be mostly headings and bullet points.***`
+					const instructions = `You are an expert note taker. Your goal is to take detailed and specific notes on all of the useful and relevant information from the web page. Provide the infromation in full markdown format with headings, bullet points and various other markdown elements.\n\n Include all of the relevant details because the user can't access the page themselves and the page will only be accessed this one time everything in the notes should be what the user would know if they read the page themselves. \n\nThe user's current objective: ${objective}\n\n*** The output shouold be mostly headings and bullet points.***`
 					const fakeHistory = [{ role: "assistant", content: `Website data:\n\n${websiteDataString}` }]
 					const pageSummary = await agentCore(instructions, fakeHistory, apiConfig, [])
 					//console.log({pageSummary})
 					return pageSummary.content
 				},
-				Search_Online: async (input) => {
+				Search_Google: async (input) => {
 					console.log("Search_Online()")
 					const search_query = input.search_query
 					console.log({ search_query })
-					socket.emit("progressMessage", { message: `I'm searching google for ${search_query}...` })
+					socket.emit("progressMessage", { message: `Searching google for "${search_query}"...` })
 					const searchResults = await searchGoogle(search_query)
-					const chooseBestLink = async (searchResultsList, searchQueryString) => {
+					const chooseBestLinks = async (searchResultsList, searchQueryString) => {
 						const resultString = JSON.stringify(searchResultsList, null, 2)
 						const resultMessageHistory = [{ role: "assistant", content: `Results from a web search for "${searchQueryString}":\n\n${resultString}` }]
-						const bestLinkTool = [{
-							"type": "function",
-							"function": {
-								"name": "Go_To_Best_Link",
-								"description": "Formalizes the decision to visit a specific URL based on the agent's analysis. This tool captures the selected link and the reasoning behind choosing it, structuring the output of the agent's decision-making process.",
-								"parameters": {
-									"type": "object",
-									"properties": {
-										"selectedLink": {
-											"type": "string",
-											"description": "The URL that the agent has chosen to visit."
+						const bestLinksTool = [
+							{
+								"type": "function",
+								"function": {
+									"name": "Go_To_Best_Links",
+									"description": "Formalizes the decision to visit specific URLs based on the agent's analysis. This tool captures the top three selected links and the reasoning behind choosing each, structuring the output of the agent's decision-making process.",
+									"parameters": {
+										"type": "object",
+										"properties": {
+											"selectedLinks": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"properties": {
+														"url": {
+															"type": "string",
+															"description": "One of the top URLs chosen by the agent."
+														},
+														"reasoning": {
+															"type": "string",
+															"description": "The rationale behind choosing this specific URL."
+														}
+													},
+													"required": ["url", "reasoning"]
+												},
+												"description": "An array containing the top three URLs selected by the agent, each with its own reasoning."
+											},
+											[loadingScreenFunctionName]: {
+												"type": "string",
+												"description": `${loadingScreenInstructions}`
+											}
 										},
-										"reasoning": {
-											"type": "string",
-											"description": "The rationale behind choosing this specific link."
-										},
-										[loadingScreenFunctionName]: {
-											"type": "string",
-											"description": `${loadingScreenInstructions}`
-										}
-									},
-									"required": ["selectedLink", "reasoning", loadingScreenFunctionName]
+										"required": ["selectedLinks", loadingScreenFunctionName]
+									}
 								}
 							}
-						}
 						]
-						const agentCommand = `Analyze the search results and select the most appropriate one based on the page title. 
-  Evaluate each link based on relevance to the query, source credibility, content accuracy, and up-to-date information.
-  Provide the chosen URL and the reasoning behind its selection, ensuring it aligns with the user's needs. *** If the selected link has expanded links, consider those as well. ***`
-						const agentResponse = await agentCore(agentCommand, resultMessageHistory, apiConfig, bestLinkTool)
-						console.log({"Link selecting agent": agentResponse.arguments})
-						console.log("TEST #1 ->", loadingScreenFunctionName)
-						console.log("TEST #2 -> ", agentResponse.arguments[loadingScreenFunctionName])
+						const agentCommand = `Analyze the search results and select the top three most appropriate links based on page title and content relevance. Evaluate each link based on relevance to the query, source credibility, content accuracy, and up-to-date information.\n\nProvide an array of the chosen URLs, each accompanied by reasoning behind its selection, ensuring each choice aligns with the user's needs. Consider expanded links in your selection if available.`;
+
+						const agentResponse = await agentCore(agentCommand, resultMessageHistory, apiConfig, bestLinksTool)
+						console.log({ "Link selecting agent": agentResponse.arguments })
 						socket.emit("progressMessage", { message: `${agentResponse.arguments[loadingScreenFunctionName]}` })
-						const bestLink = agentResponse.arguments.selectedLink
-						return bestLink
+						const bestLinks = agentResponse.arguments.selectedLinks
+						return bestLinks
 					}
-					const bestLink = await chooseBestLink(searchResults, search_query)
-					console.log({ bestLink })
-					const pageInfo = await actionSelector.Go_To_Given_Url({ url: bestLink })
-					return pageInfo
+
+
+					const bestResults = await chooseBestLinks(searchResults, search_query)
+					console.log({ bestResults })
+					let collectedData = '';
+					for (const result of bestResults) {
+							const pageInfo = await actionSelector.Go_To_Given_Url({url: result.url});
+							collectedData += `Page source:\n${result.url}\n\nPage Content:\n${pageInfo}\n\n`;
+					}
+
+					return collectedData;
 				}
 
 			}
