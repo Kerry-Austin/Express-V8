@@ -626,7 +626,7 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "Search_Google",
-					"description": "Performs a google search, clicks on the best result, and summarizes the page.",
+					"description": "Performs a google search, clicks on the bests result, and summarizes the pages. The search process is very slow, consider the user's need for a prompt response and avoid unnecessary use.",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -772,7 +772,7 @@ export class Sidekick {
 		}
 
 		const loadingScreenFunctionName = "sayThoughtsAloud"
-		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective. Instead of using of words like "the user", it is addressed directly to them instead by using words like "you".\n\nThe message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that are happening now or about to happen, NEVER use the past tense. ***`
+		const loadingScreenInstructions = `While the app works in the background, the assistant is thinking aloud. The message is written in the first person perspective. Instead of using of words like "the user", it is addressed directly to them instead by using words like "you".\n\nThe message must include begin with "I" and should include the word "you".\n\n*** It is filler text for the user to read while the app works in the background, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the present tense as it is about things that are happening now. NEVER use the past tense. ***`
 
 		// Functions
 		async function agentCore(instructions = "", providedHistory = [], apiConfig, tools = []) {
@@ -1317,16 +1317,12 @@ export class Sidekick {
 					console.log("Search_Online()")
 					const search_query = input.search_query
 					console.log({ search_query })
-					sendUpdateMessage("Google Search start", { Thought: `I'm searching google for "${search_query}"` })
+					sendUpdateMessage("Google Search start", { Thought: `I'm searching google for "${search_query}"`})
 					const searchResults = await searchGoogle(search_query)
 					const chooseBestLinks = async (searchResultsList, searchQueryString) => {
 						const resultString = JSON.stringify(searchResultsList, null, 2)
 						const resultMessageHistory = [{ role: "assistant", content: `Results from a web search for "${searchQueryString}":\n\n${resultString}` }]
-						sendUpdateMessage("Google Search Finished",
-							[{ Thought: `I got these results from a google search for "${search_query}"` }, 
-							 { Next_Action: "Picking the best results to read." }, 
-							 { Thought: "Looking at the search results, I should provide an answer based on those, while I read the web pages." }])
-
+						
 						const bestLinksTool = [
 							{
 								"type": "function",
@@ -1373,13 +1369,17 @@ export class Sidekick {
 					}
 					const summarizeCollectedData = async (collectedData, search_query) => {
 						console.log('Starting summarization of collected data.');
+						let progressCount = 0
 
 						// Create an array of promises for summarization tasks
 						const summarizationPromises = collectedData.map(async (dataPoint, index) => {
 							console.log(`Starting summarization for URL #${index + 1}: ${dataPoint.searchResult.url}...`);
 							console.log({ dataPoint })
+							progressCount += 1
 							try { // Try Summarize page
 								const summary = await actionSelector.SummarizePage({ dataPoint, search_query });
+								const percentage = {1: "33%", 2: "66%", 3: "99%"}
+								sendUpdateMessage("Web Reading", {Action: `I'm reading the web pages.  ${percentage[progressCount]} done.`})
 								console.log({ summary })
 								return summary
 							}
@@ -1411,6 +1411,7 @@ export class Sidekick {
 						return processedSummaries;
 					}
 
+					sendUpdateMessage("Google Search end", { Thought: `I'm picking the best links from the search results for "${search_query}"`})
 					const bestResults = await chooseBestLinks(searchResults, search_query)
 					const collectedData = await scrapeMultiplePages(bestResults, sendUpdateMessage)
 					const summaries = await summarizeCollectedData(collectedData, search_query)

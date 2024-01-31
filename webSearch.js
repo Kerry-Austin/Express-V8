@@ -332,7 +332,9 @@ export async function scrapeMultiplePages(searchResults, sendUpdateFunction) {
 			simpleScrape(result.url)
 				.then(data => {
 					progressCount += 1
-					//sendUpdateFunction("Web Scrape", {Action: `I've opened ${progressCount}/${searchResults.length} pages so far (${result.url})`})
+					const percentage = {1: "33%", 2: "66%", 3: "99%"}
+						
+					sendUpdateFunction("Web Scrape", {Action: `I'm downloading the page contents. ${percentage[progressCount]} done.`})
 					return {searchResult: result, websiteData: data}
 				})
 				.catch(error => {
