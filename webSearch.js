@@ -334,7 +334,7 @@ export async function scrapeMultiplePages(searchResults, sendUpdateFunction) {
 					progressCount += 1
 					const percentage = {1: "33%", 2: "66%", 3: "99%"}
 						
-					sendUpdateFunction("Web Scrape", {Action: `I'm downloading the page contents. ${percentage[progressCount]} done.`})
+					sendUpdateFunction("Web Scrape", {Action: `I'm downloading the web pages.`, Progress: percentage[progressCount]})
 					return {searchResult: result, websiteData: data}
 				})
 				.catch(error => {

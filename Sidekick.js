@@ -566,7 +566,7 @@ export class Sidekick {
 				"type": "function",
 				"function": {
 					"name": "Query_Wolfram_Alpha",
-					"description": "This tool is specifically for fetching factual data from Wolfram Alpha. Ideal for queries about weather, calculations, science data, etc. Not for self-referential queries about the AI's capabilities. Not for web searches. *** Ensure to provide a specific query. Reword what the user said if necessary ***",
+					"description": "This tool is specifically for fetching factual data from Wolfram Alpha. Ideal for a fast answer about the weather, doing calculations, science data, etc. Not for self-referential queries about the AI's capabilities. Not for web searches. *** Ensure to provide a specific query. Reword what the user said if necessary ***",
 					"parameters": {
 						"type": "object",
 						"properties": {
@@ -953,8 +953,8 @@ export class Sidekick {
 				return
 			}
 			const thoughtProcessString = JSON.stringify(thoughtProcess, null, 2)
-			const fakeHistory = [{ role: "assistant", content: `The AI assistant's current thought process:\n\n${thoughtProcessString}` }]
-			const command = `While an AI assistant app thinks in the background, construct a message as if the assistant was thinking aloud. The message must be written in the first person perspective. Instead of using of words like "the user", the message is spoken is directly to them using words like "you".\n\nThe message must include the word "I".\n\n*** It is filler text, as if the assistant was speaking aloud to the user during a conversation. Ensure to NEVER use the past tense in the message. Focus on using the future or present tense as it is about things that aree happening now or about to happen, NEVER use the past tense. ***`
+			const fakeHistory = [{ role: "assistant", content: `The current thought process:\n\n${thoughtProcessString}` }]
+			const command = `You are an AI assistant app that's working on tasks in the background. Construct a short message as if you were thinking aloud about the LAST item in the thought process. If it's a thought, speak in the future about what you should do. If it's an action, speak in the present tense and say what you're doing. If it's an observation, speak in the past tense and say what the observation was. KEEP THE MESSAGE SHORT AND CONCISE.\n\nThe message must be written in the first person perspective. Instead of using of words like "the user", esnre that the message is spoken is directly to them using words like "you".\n\nThe message must include the word "I".\n\n*** It is filler text, as if the assistant was speaking aloud to the user during a conversation. Ensure to ALWAYS use the correct tense in the message depending on if it's a thought, action or observation. ***`
 
 			const response = await agentCore(command, fakeHistory, apiConfig, [])
 			const updateMessage = response.content
@@ -1286,7 +1286,7 @@ export class Sidekick {
 					return wolframAnswer
 				},
 				List_Features: async (input) => {
-					const featureList = `Info about who you are:\n${userInstructions}  Note that currently, you don't have the capability to set reminders. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Tool names for for inernal use, ensure not to share the actual tool name with the user. In addition to the tools available, you can do everything ChatGPT can do (brainstrom, keep track of lists, etc)."`
+					const featureList = `Info about the app:\n${userInstructions}  Note that currently, you don't have the capability to set reminders. These features are in development though. You do have the abiltity to use these tools:${toolsAvailable} Tool names for for inernal use, ensure not to share the actual tool name with the user. In addition to the tools available, you can do everything ChatGPT can do (brainstrom, keep track of lists, etc)."`
 					return featureList
 				},
 				Go_To_Given_Url: async (input) => {
@@ -1317,7 +1317,7 @@ export class Sidekick {
 					console.log("Search_Online()")
 					const search_query = input.search_query
 					console.log({ search_query })
-					sendUpdateMessage("Google Search start", { Thought: `I'm searching google for "${search_query}"`})
+					sendUpdateMessage("Google Search start", { Action: `Searching google for "${search_query}"`})
 					const searchResults = await searchGoogle(search_query)
 					const chooseBestLinks = async (searchResultsList, searchQueryString) => {
 						const resultString = JSON.stringify(searchResultsList, null, 2)
@@ -1411,7 +1411,7 @@ export class Sidekick {
 						return processedSummaries;
 					}
 
-					sendUpdateMessage("Google Search end", { Thought: `I'm picking the best links from the search results for "${search_query}"`})
+					sendUpdateMessage("Google Search end", { Action: `Picking the best links from the search results.`})
 					const bestResults = await chooseBestLinks(searchResults, search_query)
 					const collectedData = await scrapeMultiplePages(bestResults, sendUpdateMessage)
 					const summaries = await summarizeCollectedData(collectedData, search_query)
@@ -1563,7 +1563,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 				const resultResponse = await resultMaker(actionName, actionInputs, sendUpdateMessage)
 				thoughtProcess.push(resultResponse.step)
 				//const resultsIncluded = [...thoughtProcess, resultResponse.step]
-				await sendUpdateMessage("Result", thoughtProcess)
+				//await sendUpdateMessage("Result", thoughtProcess)
 				//showClientThoughtProcess(thoughtProcess)
 
 				// Observe Result
