@@ -954,7 +954,7 @@ export class Sidekick {
 			}
 			const thoughtProcessString = JSON.stringify(thoughtProcess, null, 2)
 			const fakeHistory = [{ role: "assistant", content: `The current thought process:\n\n${thoughtProcessString}` }]
-			const command = `You are an AI assistant app that's working on tasks in the background. Construct a short message as if you were thinking aloud about the LAST item in the thought process. If it's a thought, speak in the future about what you should do. If it's an action, speak in the present tense and say what you're doing. If it's an observation, speak in the past tense and say what the observation was. KEEP THE MESSAGE SHORT AND CONCISE.\n\nThe message must be written in the first person perspective. Instead of using of words like "the user", esnre that the message is spoken is directly to them using words like "you".\n\nThe message must include the word "I".\n\n*** It is filler text, as if the assistant was speaking aloud to the user during a conversation. Ensure to ALWAYS use the correct tense in the message depending on if it's a thought, action or observation. ***`
+			const command = `You are an AI assistant app that's working on tasks in the background. Construct a short message as if you were thinking aloud about the LAST item in the thought process. If it's a thought, speak in the future about what you're going to do. If it's an action, speak in the present tense about what you're doing. If it's an observation, speak in the past tense and say what you did. KEEP THE MESSAGE SHORT AND CONCISE.\n\nThe message must be written in the first person perspective. Instead of using of words like "the user", esnre that the message is spoken is directly to them using words like "you".\n\nThe message must include the word "I".\n\n*** It is filler text, as if the assistant was speaking aloud to the user during a conversation. Ensure to ALWAYS use the correct tense in the message depending on if it's a thought, action or observation. ***`
 
 			const response = await agentCore(command, fakeHistory, apiConfig, [])
 			const updateMessage = response.content
@@ -1265,8 +1265,9 @@ export class Sidekick {
 			]
 			const agentRoleResponding = `review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations. The text generated will be directly sent to the user, avoid prefixing it with something like "finalResponse:" etc.\n*** Separate large blocks of text with a new line. ***`;
 			const instructions = await getAgentInstructions(agentRoleResponding, thoughtProcess)
-			const streamConfig = { ...apiConfig, streamResponse: true }
-			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, [])
+			let streamConfig = { ...apiConfig, streamResponse: true }
+			streamConfig.model = "gpt-4-1106-preview"
+			const respondingResponse = await agentCore(instructions, [], streamConfig, [])
 			//console.log({ respondingResponse })
 			return respondingResponse
 			//console.log({"Responding agent response": respondingResponse.arguments})
