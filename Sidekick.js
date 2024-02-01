@@ -1266,8 +1266,7 @@ export class Sidekick {
 			const agentRoleResponding = `review the Thought Process Log and formulate a coherent and appropriate final response to the user. As the Responding Agent, synthesize the information from the Thought Process Log and user instructions to create a response that effectively addresses the user's needs and expectations. The text generated will be directly sent to the user, avoid prefixing it with something like "finalResponse:" etc.\n*** Separate large blocks of text with a new line. ***`;
 			const instructions = await getAgentInstructions(agentRoleResponding, thoughtProcess)
 			let streamConfig = { ...apiConfig, streamResponse: true }
-			streamConfig.model = "gpt-4-1106-preview"
-			const respondingResponse = await agentCore(instructions, [], streamConfig, [])
+			const respondingResponse = await agentCore(instructions, messageHistory, streamConfig, [])
 			//console.log({ respondingResponse })
 			return respondingResponse
 			//console.log({"Responding agent response": respondingResponse.arguments})
