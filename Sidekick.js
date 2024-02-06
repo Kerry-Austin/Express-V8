@@ -21,6 +21,7 @@ import { Readable } from 'stream';
 import { parse } from 'best-effort-json-parser' // double import (from index.js)
 import { simpleScrape, searchGoogle, askWolfram, scrapeWebsite, scrapeMultiplePages } from './webSearch.js';
 import { LogExamples } from "./examplePrompts.js"
+import { StreamingQueue } from "./streamingQueue.js"
 
 
 
@@ -68,7 +69,8 @@ const db = getFirestore(app);
 
 
 export class Sidekick {
-	constructor(location, socket = null) {
+	// use streaming queue to manage the order and streamSender to manage the logic
+	constructor(location, socket = null, streamHandler) {
 		this.userId = location.userId.toString();
 		this.conversationId = location.conversationId.toString();
 		this.userRef = doc(db, 'ConversationsByUser', this.userId);
@@ -102,7 +104,7 @@ export class Sidekick {
 	}
 
 	async createConversation() {
-		console.log("createConversation()");
+		console.log("createConversation()")
 		try {
 			const blankConversation = {
 				conversationId: this.conversationId,
@@ -517,7 +519,7 @@ export class Sidekick {
 		}
 	}
 
-	async reasoningEngine(apiOptions) {
+	async reasoningEngine(apiOptions, conversationOptions, handleStreamingText) {
 		const clearProgressMessage = () => {
 			this.socket.emit("progressMessage", { message: "" })
 		}
@@ -955,12 +957,18 @@ export class Sidekick {
 			const thoughtProcessString = JSON.stringify(thoughtProcess, null, 2)
 			const fakeHistory = [{ role: "assistant", content: `The current thought process:\n\n${thoughtProcessString}` }]
 			const command = `You are an AI assistant app that's working on tasks in the background. Construct a short message as if you were thinking aloud about the LAST item in the thought process. If it's a thought say you're thinking about what to do next. If it's an action, speak in the present tense about what you're doing. If it's an observation, speak in the past tense and say what you did. KEEP THE MESSAGE SHORT AND CONCISE.\n\nThe message must be written in the first person perspective. Instead of using of words like "the user", esnre that the message is spoken is directly to them using words like "you".\n\nThe message must include the word "I".\n\n*** It is filler text, as if the assistant was speaking aloud to the user during a conversation. Ensure to ALWAYS use the correct tense in the message depending on if it's a thought, action or observation. ***`
+			
 
-			const response = await agentCore(command, fakeHistory, apiConfig, [])
-			const updateMessage = response.content
-			console.log({ [tag]: updateMessage })
-			this.socket.emit("progressMessage", { message: `${updateMessage}` })
-			return updateMessage
+			let streamAPiConfig = { ...apiConfig}
+			streamAPiConfig.streamResponse = true
+			const response = await agentCore(command, fakeHistory, streamAPiConfig, [])
+			const stream = OpenAIStream(response)
+			//console.log({response})
+			await handleStreamingText(stream, conversationOptions)
+			//const updateMessage = response.content
+			//console.log({ [tag]: updateMessage })
+			//this.socket.emit("progressMessage", { message: `${updateMessage}` })
+			//return updateMessage
 		}
 
 		async function referenceFunctions() {
@@ -1588,13 +1596,13 @@ The knowledge base is a valuable resource for providing personalized and relevan
 		}
 
 		const finalThoughtProcess = await testing123abc(this.socket)
-		const stream = await respondingAgent(finalThoughtProcess)
+		const response = await respondingAgent(finalThoughtProcess)
 		//await noteTaker()
 		await sendUpdateMessage()
-		return stream
+		return response
 	}
 
-	async streamResponse(sentMessage, conversationOptions) {
+	async streamResponse(sentMessage, conversationOptions, handleStreamingText) {
 		console.log("streamResponse()");
 		console.log("streamResponse() -> Given:", { sentMessage }, { conversationOptions });
 		sentMessage = {
@@ -1651,8 +1659,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 
 		console.log("streamResponse() -> reasoningEngine()...")
 		//console.log({ "messages!!!": apiOptions.messages })
-		let response = await this.reasoningEngine(apiOptions)
-
+		let response = await this.reasoningEngine(apiOptions, conversationOptions, handleStreamingText)
 		try {
 			const stream = OpenAIStream(response, {
 				onStart: async () => {
@@ -1666,7 +1673,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 					//console.log({ token });
 				},
 				onCompletion: async completion => {
-					//console.log('stream.onCompletion() -> Completion completed:', completion);
+					console.log('stream.onCompletion() -> Completion completed:', completion);
 					let botResponse = {
 						role: "assistant",
 						content: completion,
@@ -1698,6 +1705,7 @@ The knowledge base is a valuable resource for providing personalized and relevan
 			});
 
 			console.log("streamResponse() -> END");
+			//await handleStreamingText(stream, conversationOptions)
 			return stream;
 		} catch (error) {
 			consoole.log("ERROR :(")

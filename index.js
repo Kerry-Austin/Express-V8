@@ -102,7 +102,7 @@ async function logStream() {
 //logStream().catch(err => console.error("Stream error:", err));
 
 
-const activeStreams = new Map();
+const activeStreams = new Map(); 
 const createNewReadable = () => new Readable({ read() { } });
 
 
@@ -197,26 +197,13 @@ io.on('connection', async (socket) => {
 	});
 
 
-	// 1. Socket Event Listener
-	socket.on('textRequest', async (data) => {
-		console.log('socket.on(textRequest)');
-			socket.emit("progressMessage", { message: ""})
+	
 
-
-		resetAudioState()
-
-		const { location, sentMessage, conversationOptions } = data.payload;
-
+	async function handleStreamingText(streamingText, conversationOptions){
+		console.log({streamingText}, {conversationOptions})
 		const audioId = Date.now().toString()
-
 		let sentenceBuffer = '';
 		const maxSentenceCount = voiceOptions.sentencesPerCall
-		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-		console.log({ location }, { sentMessage }, { conversationOptions })
-		const sidekickInstance = new Sidekick(location, socket);
-		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions);
-		console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-
 		let buffer = ''; // chunk location
 		let previousFinalResponse = ''
 		// 3. Text Streaming and Sentence Grouping
@@ -231,7 +218,7 @@ io.on('connection', async (socket) => {
 			}
 			textChunk = removeSpecificString(textChunk, "\\\\");
 			function shouldHandleChunk(textChunk) {
-				
+
 
 				// If "finalResponse" is found in the buffer, set the flag
 				if (buffer.includes('"finalResponse"')) {
@@ -253,13 +240,13 @@ io.on('connection', async (socket) => {
 			*/
 
 			buffer += textChunk;
-			
+
 			//let jsonResponse = parse(buffer);
 			//console.log({jsonResponse})
-			
+
 			//let toolArguments = jsonResponse.tool_calls[0]?.function?.arguments;
 			//console.log({toolArguments})
-			
+
 			function getNewChunk(currentFinalResponse) {
 				// Determine the new chunk by comparing with the previous state
 				const newChunk = currentFinalResponse.slice(previousFinalResponse.length);
@@ -283,7 +270,7 @@ io.on('connection', async (socket) => {
 					socket.emit(`textChunk`, { textChunk: finalResponseChunk });
 					actualTextchunk = finalResponseChunk
 				}
-				
+
 			} catch (error) {
 				console.log({ "parsedArguments": `${error}` });
 			}
@@ -319,6 +306,21 @@ io.on('connection', async (socket) => {
 				audioState.pendingGroups.push(sentenceBuffer);
 			}
 		}
+	}
+	// 1. Socket Event Listener
+	socket.on('textRequest', async (data) => {
+		console.log('socket.on(textRequest)');
+			socket.emit("progressMessage", { message: ""})
+
+
+		resetAudioState()
+
+		const { location, sentMessage, conversationOptions } = data.payload;
+
+		
+		const sidekickInstance = new Sidekick(location, socket);
+		const streamingText = await sidekickInstance.streamResponse(sentMessage, conversationOptions, handleStreamingText);
+		await handleStreamingText(streamingText, conversationOptions)
 
 
 	});

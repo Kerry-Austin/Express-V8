@@ -38,3 +38,31 @@ async function testReasoningEngine (state) {
 }
  // -------------------------------- //
 await testReasoningEngine("new")
+
+function streamResponse(){
+	function reasoningEngine(){
+		const firstUpdateStream = getProgress()
+		const secondUpdateStream = getProgress()
+		const finalMessage = getProgress()
+		return finalMessage
+	}
+	const finalResponse = reasoningEngine()
+	const stream = transformResponse(finalResponse)
+	return stream
+}
+
+function addToStreamingQueue(){
+	// get next item in queue logic, etc
+	const stream = transformResponse(finalResponse)
+	return stream
+}
+function streamResponse(){
+	function reasoningEngine(){
+	const firstUpdateStream = getProgress()
+	addToStreamingQueue(firstUpdateStream)
+	const secondUpdateStream = getProgress()
+	addToStreamingQueue(secondUpdateStream)
+	const finalMessage = getProgress()
+	addToStreamingQueue(finalMessage)
+}
+}
